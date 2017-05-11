@@ -1,21 +1,15 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis version="2.14.3-Essen" minimumScale="-4.65661e-10" maximumScale="1e+08" hasScaleBasedVisibilityFlag="0">
+<qgis version="2.18.7" minimumScale="0" maximumScale="1e+08" hasScaleBasedVisibilityFlag="0">
   <pipe>
-    <rasterrenderer opacity="1" alphaBand="0" classificationMax="1" classificationMinMaxOrigin="User" band="1" classificationMin="0" type="singlebandpseudocolor">
+    <rasterrenderer opacity="1" alphaBand="-1" classificationMax="100" classificationMinMaxOrigin="User" band="1" classificationMin="0" type="singlebandpseudocolor">
       <rasterTransparency/>
       <rastershader>
         <colorrampshader colorRampType="INTERPOLATED" clip="0">
-          <item alpha="255" value="0" label="0.000000" color="#ffffcc"/>
-          <item alpha="255" value="0.1" label="0.100000" color="#d9f0c2"/>
-          <item alpha="255" value="0.2" label="0.200000" color="#b3e1b8"/>
-          <item alpha="255" value="0.3" label="0.300000" color="#8dd2b7"/>
-          <item alpha="255" value="0.4" label="0.400000" color="#67c4bd"/>
-          <item alpha="255" value="0.5" label="0.500000" color="#41b6c4"/>
-          <item alpha="255" value="0.6" label="0.600000" color="#38a0bf"/>
-          <item alpha="255" value="0.7" label="0.700000" color="#308aba"/>
-          <item alpha="255" value="0.8" label="0.800000" color="#2a6fb0"/>
-          <item alpha="255" value="0.9" label="0.900000" color="#2752a2"/>
-          <item alpha="255" value="1" label="1.000000" color="#253494"/>
+          <item alpha="255" value="0" label="000000" color="#ffffcc"/>
+          <item alpha="255" value="25" label="2500000" color="#a1dab4"/>
+          <item alpha="255" value="50" label="5000000" color="#41b6c4"/>
+          <item alpha="255" value="75" label="7500000" color="#2c7fb8"/>
+          <item alpha="255" value="100" label="10000000" color="#253494"/>
         </colorrampshader>
       </rastershader>
     </rasterrenderer>

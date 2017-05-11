@@ -9,14 +9,14 @@
 Support functions and classes for raster handling
 
 Date created: 09/06/2016
-Date last modified: 09/06/2016
+Date last modified: 09/05/2017
 
 """
 
 __author__ = "Christina Ludwig"
 __version__ = "v1"
 
-
+import glob
 from osgeo import gdal, ogr
 from gdalconst import GA_ReadOnly
 import os, sys
@@ -32,493 +32,45 @@ import fnmatch
 import operator
 import datetime as dati
 import subprocess
+import zipfile
+import xml.etree.ElementTree as eTree
+import warnings
 
 # CLASSES ===============================================================
 
-def compareProjections(scenes):
-
-    projs = [sce.proj for sce in scenes]
-    #todo implement function
-
-    # check if elements are all the same
-    # if not choose projection of first scene as target projection
-    # change projection of other scenes to target projection by transforming upperleft cooridnates of geotransform attribute of each scenes with reprojectPoint
-
-class ImageComposite(object):
-    """Object to create image composite."""
-
-    def __init__(self, scenes, AOI=None, stepSize=None):
-
-        if len(scenes) == 0:
-            raise AttributeError ("No input scenes")
-        elif len(scenes) > 255:
-            raise AttributeError ("Too many input scenes for image composite.")
-        else:
-            self.scenes = scenes
-
-        # Number of bands
-        self.nbands = len(self.scenes[0].files)
-
-        # Get extent
-        if AOI == None:
-            sceneSel = [sce.files[3] for sce in self.scenes]
-            self.extent = getJointExtent(sceneSel)
-            if self.extent is None:
-                #logging.critical("Extent could not be calculated, because input files are not all overlapping.")
-                raise ValueError ("Input files are not overlapping.")
-                # todo how to return none instead of class
-        else:
-            # todo: Check if AOI intersects with other scenes
-            self.extent = AOI
-
-        # Get step size for index computation
-        if stepSize == None or stepSize >= self.extent.ncol:
-            self.stepSize = self.extent.ncol
-        else:
-            self.stepSize = stepSize
-
-        # Get metadata
-        metadata = gdal.Open(self.scenes[0].files[3], GA_ReadOnly)
-        self.geotrans = list(metadata.GetGeoTransform())
-        self.geotrans[0] = self.extent.ulX
-        self.geotrans[3] = self.extent.ulY
-        self.pixSize = self.geotrans[1]
-
-        # todo:Check projections of input scenes
-        self.proj = metadata.GetProjection()
-        del metadata
-
-        # initilize output arrays
-        self.validObs_index = np.empty((0, self.extent.ncol), dtype=np.int8)
-        self.masks = np.empty((len(self.scenes), 0, self.extent.ncol), dtype=np.int8)
-
-        # Dictionary of layer index and sceneID
-        self.sceneIDs = {}
-        for j,f in enumerate(self.scenes):
-            self.sceneIDs[j] = f.ID
-
-        self.sceneLookup = {}
-        for j,f in enumerate(self.scenes):
-            self.sceneLookup[j] = f
-            f.indexNr = j
-
-        self.subextents = getSubExtents(self.extent, self.stepSize)
-
-        # Transformation
-        self.referenceScene = ""
-        self.targetScenes = []
-        self.transformedScenes = []
-        self.indexScenes = []
-
-    def calc_validPixels(self):
-        """Calculate number of valid observations per pixel."""
-        valid = []
-        for sce in self.scenes:
-            jointExtent = getJointExtent(sce.files[3], AOIextent=self.extent)
-            mask = sce.getMask(extent=jointExtent)
-            geotrans = [jointExtent.ulX, jointExtent.pixSize, 0.0, jointExtent.ulY, 0.0, -jointExtent.pixSize]
-            if mask.shape[1] < self.extent.ncol or mask.shape[0] < self.extent.nrow:
-                mask = padArray(mask, geotrans, sce.proj, self.extent)
-            valid.append(np.where(mask == 0, 1, 0))
-        valid = np.array(valid)
-        self.validObs = bn.nansum(valid, axis=0)
-        del valid
-
-    def calc_index(self, inputScenes, method="HOT", bands=[1,2,3,4,5,6], transformed=True):
-        """Calculate image composite index based on specified method."""
-        print "\nCalculating composite index using method: %s" % method
-
-        self.index = np.empty((0, self.extent.ncol), dtype=np.uint8)
-        self.validObs_index = np.empty((0, self.extent.ncol), dtype=np.int8)
-
-        # todo: remove negative values in normalized images by adding the minimum of all images
-        # minimum = min([file.GetRasterBand(band).GetMinimum() for band in range(1, file.RasterCount+1)])
-
-        for i, subext in enumerate(self.subextents):
-
-            # Stack scenes with data and scene index number
-            dims = (len(inputScenes), subext.nrow, subext.ncol)
-            refStack = np.zeros(dims, dtype=[("data", "f4"),("ID", "u1"),("NDVI", "f4")])
-
-            # Reference bands
-            for j, sce in enumerate(inputScenes):
-
-                # Get joint extent of file and subextent
-                jointExtent = getJointExtent(sce.files[3], AOIextent=subext)
-
-                # Read in bands depending on composite method
-                if jointExtent == None:
-                    ref = np.empty((subext.nrow, subext.ncol))
-                    ref[:] = np.nan
-                else:
-                    if method == "blue":
-                        ref = sce.getBand(bands[0], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    elif method == "maxNDVI":
-                        nir = sce.getBand(bands[3], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        red = sce.getBand(bands[2], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        ref = (nir - red) / (nir + red)
-                        del nir, red
-                    elif method == "HOT":
-                        blue = sce.getBand(bands[0], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        red = sce.getBand(bands[2], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        ref = blue - 0.5*red - 800.
-                        del blue, red
-                    elif method == "maxRatio":
-                        blue = sce.getBand(bands[0], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        nir = sce.getBand(bands[3], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        swir1 = sce.getBand(bands[4], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        ref = np.nanmax(np.array([nir, swir1]), axis=0) / blue
-                        del blue, nir, swir1
-                    elif method == "maxNDWI":
-                        nir = sce.getBand(bands[3], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        swir1 = sce.getBand(bands[4], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                        ref = (nir - swir1) / (nir + swir1)
-                        del nir, swir1
-                    else:
-                        print "Method not valid."
-                        return None
-
-                    # Adjust size of array to size of subextent
-                    geotrans = [jointExtent.ulX, self.pixSize, 0.0, jointExtent.ulY, 0.0, -self.pixSize]
-                    if ref.shape[1] < subext.ncol or ref.shape[0] < subext.nrow:
-                        ref = padArray(ref, geotrans, sce.proj, subext)
-
-                # Write data to stack
-                refStack["data"][j] = ref
-                refStack["ID"][j] = sce.indexNr
-                del ref
-
-            # calculate composite index
-            if method == "blue":
-                index, valid_obs = indexByPercentile(refStack, 25)[1:3]
-            elif method == "maxNDVI":
-                median = bn.nanmedian(refStack["data"], axis=0)
-                # todo check if results are the same
-                index_max, valid_obs = indexByPercentile(refStack, 100)[1:3]
-                index_min, valid_obs = indexByPercentile(refStack, 0)[1:3]
-                index = np.where(median < -0.05, index_min, index_max)
-            elif method == "HOT":
-                # todo check if results are the same
-                index, valid_obs = indexByPercentile(refStack, 25)[1:3]
-            elif method == "maxRatio":
-                index, valid_obs = indexByPercentile(refStack, 100)[1:3]
-            elif method == "maxNDWI":
-                index, valid_obs = indexByPercentile(refStack, 100)[1:3]
-
-            # Append subextents to output arrays
-            self.index = np.vstack([self.index, index])
-            self.validObs_index = np.vstack([self.validObs_index, valid_obs])
-
-            print "%.2f%% done ..." % ((float(i)+1)/float(len(self.subextents)) * 100)
-
-            del refStack, index, valid_obs
-
-        try:
-            self.indexScenes = [self.sceneLookup[idx] for idx in np.unique(self.index) if idx != 255]
-        except:
-            print "ID not in sceneLookup."
-            logging.critical("ID in index not in scene Lookup.")
-            sys.exit(1)
-
-    def calc_index_combi(self, inputScenes, bands=[1,2,3,4,5,6], transformed=True):
-        """Calculate image composite index based a combined method."""
-
-        print "\nCalculating composite index using method: Combi"
-
-        self.index = np.empty((0, self.extent.ncol), dtype=np.int8)
-        self.validObs_index = np.empty((0, self.extent.ncol), dtype=np.int8)
-
-        # todo: remove negative values in normalized images by adding the minimum of all images
-        # minimum = min([file.GetRasterBand(band).GetMinimum() for band in range(1, file.RasterCount+1)])
-
-        # Scene ranking by cloud coverage
-        inputScenes.sort(key=operator.attrgetter("cloudCoverage"), reverse=False)
-
-        # Initial scene
-        initScene = inputScenes[0]
-        additionalScenes = [sce for sce in inputScenes if sce != initScene]
-
-        for i, subext in enumerate(self.subextents):
-
-            # Create empty stack for scene and features
-            dims = (1, subext.nrow, subext.ncol)
-            compStack = np.zeros(dims, dtype=[("ID", "u2"),("HOT", "f4"),("RATIO", "f4"),("NDVI", "f4"),("water", "i2"),("BLUE", "f4"), ("TCBI", "f4")])
-            # Get joint extent of file and subextent
-            jointExtent_init = getJointExtent(initScene.files[3], AOIextent=subext)
-
-            # Read in bands depending on composite method
-            if jointExtent_init == None:
-                nan = np.empty((subext.nrow, subext.ncol))
-                nan[:] = np.nan
-                # Write data to stack
-                compStack["ID"] = 255
-                compStack["HOT"], compStack["NDVI"], compStack["water"], compStack["BLUE"], compStack["RATIO"], compStack["TCBI"] = nan, nan, nan, nan, nan, nan
-            else:
-                # Read bands
-                blue = initScene.getBand(bands[0], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-                green = initScene.getBand(bands[1], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-                red = initScene.getBand(bands[2], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-                nir = initScene.getBand(bands[3], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-                swir1 = initScene.getBand(bands[4], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-                swir2 = initScene.getBand(bands[5], extent=jointExtent_init, masked=True, transformed=transformed).astype("float32")
-
-                # Read cfmask
-                waterMask = initScene.getWatermask(extent=jointExtent_init)
-
-                # Calculate features
-                HOT = blue * math.sin(1.3) - red * math.cos(1.3)
-                NDVI = (nir - red) / (nir + red)
-                RATIO = swir1 / blue # np.nanmax(np.array([nir, swir1]), axis=0) / (blue + red)
-                TCBI = (0.3029 * blue) + (0.2786 * green)+(0.4733 * red)+(0.5599 * nir)+(0.508 * swir1)+(0.1872 * swir2)
-
-                # Adjust size of array to size of subextent
-                geotrans = [jointExtent_init[0], self.pixSize, 0.0, jointExtent_init[1], 0.0, -self.pixSize]
-                if HOT.shape[1] < subext.ncol or HOT.shape[0] < subext.nrow:
-                    HOT = padArray(HOT, geotrans, initScene.proj, subext)
-                    NDVI = padArray(NDVI, geotrans, initScene.proj,subext)
-                    blue = padArray(blue, geotrans, initScene.proj,subext)
-                    RATIO = padArray(RATIO, geotrans, initScene.proj,subext)
-                    TCBI = padArray(TCBI, geotrans, initScene.proj,subext)
-                    waterMask = padArray(waterMask, geotrans, initScene.proj,subext)
-
-                # Write data to stack
-                compStack["ID"] = np.where(~np.isnan(HOT), initScene.indexNr, 255)
-                compStack["HOT"] = HOT
-                compStack["NDVI"] = NDVI
-                compStack["water"] = waterMask
-                compStack["RATIO"] = RATIO
-                compStack["BLUE"] = blue
-                compStack["TCBI"] = TCBI
-
-                # median of ND red Swir1
-                # medianFile = os.path.join(self.scenes[0].tempDir, "NDRedSwir_median.tif")
-                # if os.path.exists(medianFile):
-                #     median = raster2array(medianFile, extent=subext)[0].astype("int16")
-                # else:
-                #     median = NDVI
-
-                del HOT, RATIO, TCBI, blue, green, red, nir, swir1, swir2
-
-            # Reference bands
-            for j, sce in enumerate(additionalScenes):
-
-                # Create empty stack for scene and features
-                newStack = np.zeros(dims, dtype=[("ID", "u2"),("HOT", "f4"),("RATIO", "f4"),("water", "i2"),("NDVI", "f4"),("BLUE", "f4"), ("TCBI", "f4")])
-
-                # Get joint extent of file and subextent
-                jointExtent = getJointExtent(sce.files[3], AOIextent=subext)
-
-                # Read in bands depending on composite method
-                if jointExtent == None:
-                    nan = np.empty((subext.nrow, subext.ncol))
-                    nan[:] = np.nan
-                    # Write data to stack
-                    newStack["ID"] = sce.indexNr
-                    newStack["HOT"], newStack["watermask"], newStack["NDVI"], newStack["BLUE"], newStack["RATIO"], newStack["TCBI"] = nan, nan, nan, nan, nan, nan
-                else:
-                    # Read bands
-                    blue = sce.getBand(bands[0], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    green = sce.getBand(bands[1], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    red = sce.getBand(bands[2], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    nir = sce.getBand(bands[3], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    swir1 = sce.getBand(bands[4], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-                    swir2 = sce.getBand(bands[5], extent=jointExtent, masked=True, transformed=transformed).astype("float32")
-
-                    waterMask_sce = initScene.getWatermask(extent=jointExtent)
-                    if waterMask_sce is None:
-                        waterMask_sce = np.zeros((subext.nrow, subext.ncol))
-
-                    # Calculate Features
-                    HOT = blue * math.sin(1.3) - red * math.cos(1.3)
-                    NDVI = (nir - red) / (nir + red)
-                    RATIO = swir1 / blue #bn.nanmax(np.array([nir, swir1]), axis=0) / blue # (swir1 - red) / (swir1 + red) #bn.nanmax(np.array([nir, swir1]), axis=0) / blue
-                    TCBI = (0.3029 * blue) + (0.2786 * green)+(0.4733 * red)+(0.5599 * nir)+(0.508 * swir1)+(0.1872 * swir2)
-
-                    # Adjust size of array to size of subextent
-                    geotrans = [jointExtent.ulX, self.pixSize, 0.0, jointExtent.ulY, 0.0, -self.pixSize]
-                    if HOT.shape[1] < subext.ncol or HOT.shape[0] < subext.nrow:
-                        HOT = padArray(HOT, geotrans, sce.proj, subext)
-                        NDVI = padArray(NDVI, geotrans, sce.proj,subext)
-                        blue = padArray(blue, geotrans, sce.proj,subext)
-                        RATIO = padArray(RATIO, geotrans, sce.proj,subext)
-                        TCBI = padArray(TCBI, geotrans, sce.proj,subext)
-                        waterMask_sce = padArray(waterMask_sce, geotrans, sce.proj, subext)
-
-                    # Write data to stack
-                    newStack["ID"] = sce.indexNr
-                    newStack["HOT"] = HOT
-                    newStack["NDVI"] = NDVI
-                    newStack["water"] = waterMask_sce
-                    newStack["RATIO"] = RATIO
-                    newStack["BLUE"] = blue
-                    newStack["TCBI"] = TCBI
-
-                    del HOT, RATIO, NDVI, TCBI, blue, green, red, nir, swir1, swir2, waterMask_sce
-
-                # Choose best pixel out of compositeStack and newStack
-                # add new pixels to composite where composite is nan
-                compStack = np.where((compStack["ID"]==255) & (~np.isnan(newStack["HOT"])), newStack, compStack)
-
-                # MASKS
-                # Water mask
-                water = np.where((compStack["water"] == 1) | (newStack["water"] == 1), 1, 0)
-                # Shadow mask
-                shadow = np.where((compStack["TCBI"] < 2000) | (newStack["TCBI"] < 2000), 1, 0)
-                # HOT mask (HOT < 1000)
-                HOTvalid = np.squeeze((compStack["HOT"] > 1000) | (newStack["HOT"] > 1000)).astype("bool")
-
-                # REPLACE VALUES
-                # On WATER use min(blue)
-                compStack = np.where( water & (newStack["BLUE"] < compStack["BLUE"]), newStack, compStack)
-
-                # On land and HOT is valid use min(HOT)
-                compStack = np.where( ~water & HOTvalid & (newStack["HOT"] < compStack["HOT"]), newStack, compStack)
-                #
-                # # If HOT is not valid use ratio
-                compStack = np.where( ~water & ~HOTvalid & shadow & (newStack["NDVI"] > compStack["NDVI"]), newStack, compStack)
-                compStack = np.where( ~water & ~HOTvalid & ~shadow & (newStack["RATIO"] < compStack["RATIO"]), newStack, compStack)
-
-                # Lueck 2016
-                # compStack = np.where((compStack["ID"]==255) & ~np.isnan(newStack["HOT"]), newStack, compStack)
-                # # ... using HOT
-                # HOTvalid = (compStack["HOT"] > 1000) & (newStack["HOT"] > 1000)
-                # compStack = np.where( HOTvalid & (newStack["HOT"] < compStack["HOT"]), newStack, compStack)
-                # # ... using maxRatio
-                # TCBIvalid = (compStack["TCBI"] < 5000) & (newStack["TCBI"] < 5000)
-                # compStack = np.where( ~HOTvalid & TCBIvalid & (newStack["RATIO"] > compStack["RATIO"]), newStack, compStack)
-                # # ... using maxNDVI
-                # compStack = np.where( ~HOTvalid & ~TCBIvalid & (newStack["NDVI"] > compStack["NDVI"]), newStack, compStack)
-
-            # Append subextents to output arrays
-            self.index = np.vstack([self.index, np.squeeze(compStack["ID"])])
-            #self.validObs_index = np.vstack([self.validObs_index, valid_obs])
-
-            print "%.2f%% done ..." % ((float(i)+1)/float(len(self.subextents)) * 100)
-
-            del compStack # , index, valid_obs
-
-        self.indexScenes = [self.sceneLookup[idx] for idx in np.unique(self.index) if idx != 255]
-
-    def export_composite(self, outfileDir, outfileName, transformed=False, validPixels=True):
-        """Export composite image."""
-
-        print "\nExporting composite:"
-
-        # Create output files
-        # ------------------
-        outdriver = gdal.GetDriverByName("GTIFF")
-        nodata = -32768
-
-        # Output file for valid observations
-        if validPixels:
-            if not hasattr(self, 'validObs'):
-                self.calc_validPixels()
-
-            if not os.path.exists(outfileDir):
-                raise IOError("Output folder does not exist.")
-
-            dest = os.path.join(outfileDir, outfileName + "_validObs.tif")
-            if os.path.exists(dest):
-                os.unlink(dest)
-            validFile = outdriver.Create(str(dest), self.extent.ncol, self.extent.nrow, 1, gdal.GDT_Byte)
-            validFile.GetRasterBand(1).SetNoDataValue(255)
-            validFile.SetGeoTransform(self.geotrans)
-            validFile.SetProjection(self.proj)
-            validFile.GetRasterBand(1).WriteArray(self.validObs)
-            validFile.FlushCache()
-            del validFile
-
-        # output file for scene index
-        dest = os.path.join(outfileDir, outfileName + "_sceneIndex.tif")
-        if os.path.exists(dest):
-            os.unlink(dest)
-        indexFile = outdriver.Create(str(dest), self.extent.ncol, self.extent.nrow, 1, gdal.GDT_Byte)
-        indexFile.GetRasterBand(1).SetNoDataValue(255)
-        indexFile.SetGeoTransform(self.geotrans)
-        indexFile.SetProjection(self.proj)
-        indexFile.GetRasterBand(1).WriteArray(self.index)
-        indexFile.FlushCache()
-        del indexFile
-
-        perc25 = np.empty(shape=(self.nbands, self.extent.nrow, self.extent.ncol), dtype="float32")
-        perc25[:] = np.nan
-
-        for j, sce in enumerate(self.indexScenes):
-
-            print "%.2f%% done ..." % ((float(j)+1)/float(len(self.indexScenes)) * 100)
-
-            jointExtent = getJointExtent(sce.files[3], AOIextent=self.extent)
-
-            if jointExtent is not None:
-                bands = []
-                for b in range(1, self.nbands+1):
-                    band = sce.getBand(bandNo=b, extent=jointExtent, masked=True, transformed=transformed).astype("Int16")
-                    if band is None:
-                        logging.error("Requested invalid band from image %s" % sce.ID)
-                    else:
-                        band = band.astype("int16")
-                    if band.shape[1] < self.extent.ncol or band.shape[0] < self.extent.nrow:
-                        band = padArray(band, sce.geotrans, sce.proj, self.extent)
-                    bands.append(band)
-                bands = np.array(bands)
-                perc25 = np.where(self.index == sce.indexNr, bands, perc25)
-
-        # Export band composite
-        # Spectral bands
-        dest = os.path.join(outfileDir, outfileName + ".tif")
-        if os.path.exists(dest):
-            os.unlink(dest)
-        spectralFile = outdriver.Create(str(dest), self.extent.ncol, self.extent.nrow, self.nbands, gdal.GDT_Int16)
-        spectralFile.SetGeoTransform(self.geotrans)
-        spectralFile.SetProjection(self.proj)
-        perc25 = np.where(np.isnan(perc25), nodata, perc25)
-
-        for b in range(1, self.nbands+1):
-            spectralFile.GetRasterBand(b).SetNoDataValue(nodata)
-            spectralFile.GetRasterBand(b).WriteArray(perc25[b-1,:,:])
-            spectralFile.FlushCache()
-
-        del perc25
-
-        del spectralFile
-
 class Scene(object):
     """Basic Object for satellite scene."""
-    def __init__(self, sceneDir, tempDir=None, extentAOI=None):
+    def __init__(self, sceneDir, ID=None, tempDir=None, extentAOI=None):
 
-        # Scene description
-        self.dir = sceneDir
-        self.ID = os.path.basename(sceneDir)[:16]
-
-        self.extent = extentAOI
+        # Check scene directory
+        if os.path.isdir(sceneDir):
+            self.zipped = False
+            self.dir = sceneDir
+        elif sceneDir.endswith(".zip"):
+            self.zipped = True
+            self.dir = sceneDir
+        else:
+            raise RuntimeError("Input directory is invalid.")
 
         # Temp directory
-        if tempDir == None:
+        if tempDir is None:
             self.tempDir = self.dir
         else:
             self.tempDir = tempDir
 
-        if os.path.exists(os.path.join(self.tempDir, "masks")):
-            self.maskDir = os.path.join(self.tempDir, "masks")
-        else:
-            self.maskDir = self.tempDir
+        self.extent = extentAOI
 
-        if os.path.exists(os.path.join(self.tempDir, "histogramMatching")):
-            self.histoDir = os.path.join(self.tempDir, "histogramMatching")
-        else:
-            self.histoDir = self.tempDir
+        self.cloudCoverage = None
 
-    def getMetadata(self, band=0):
+    def getGeotrans(self):
 
         # Get extent
-        #todo raise ValueError if extent is None
-
-        self.extent = getJointExtent(self.files[band], AOIextent=self.extent)
-        if self.extent == None:
-            raise Exception("Scene not in extent.")
+        self.extent = getJointExtent(self.files[-1], AOIextent=self.extent)
+        if self.extent is None:
+            raise RuntimeError("Scene not within AOI.")
 
         # Get metadata
-        metadata = gdal.Open(self.files[band], GA_ReadOnly)
+        metadata = gdal.Open(self.files[-1], GA_ReadOnly)
         self.geotrans = list(metadata.GetGeoTransform())
         self.geotrans[0] = self.extent.ulX
         self.geotrans[3] = self.extent.ulY
@@ -527,54 +79,16 @@ class Scene(object):
         self.nodata = metadata.GetRasterBand(1).GetNoDataValue()
         del metadata
 
-        # Initialize variables for later reference
-        transformedScene = fnmatch.filter(os.listdir(self.histoDir), "*" + self.ID + "_matched.tif")
-        if len(transformedScene) == 1:
-            self.transformed = True
-            self.transformedScene = os.path.join(self.histoDir, transformedScene[0])
-        else:
-            self.transformed = False
-            self.transformedScene = ""
-
-        self.VRTfile = ""
-        self.indexNr = None
-        self.cloudCoverage = None
-        self.deltaDays = None
-        self.bandMin = None
-
-    def updateExtent(self, extent, band=0):
-        # Get extent
-        #todo raise ValueError if extent is None
-        self.extent = getJointExtent(self.files[band], AOIextent=extent)
-        if self.extent == None:
-            raise Exception("Scene not in extent.")
-
-    def getMinimumSpectralValue(self):
-
-        if self.bandMin is None:
-            # Band minimum value
-            mins = []
-            for f in self.files:
-                openF = gdal.Open(f)
-                mins.append(openF.GetRasterBand(1).GetStatistics(0,1)[0])
-                del openF
-            self.bandMin = min(mins)
-
-        return self.bandMin
-
-    def getBand(self, bandNo=1, masked=True, extent=None, transformed=False ):
+    def getBand(self, bandNo=1, masked=True, extent=None):
         """Get specified band of scene as numpy array."""
 
         if extent == None:
             extent = self.extent
 
-        if transformed and os.path.exists(self.transformedScene):
-            band = raster2array(self.transformedScene, AOIExtent=extent, bandNo=bandNo)[0]
-        else:
-            band = raster2array(self.files[bandNo-1], AOIExtent=extent)[0]
+        band = raster2array(self.files[bandNo-1], self.extent)[0]
 
         if band is None:
-            raise ValueError("Requested band %s for scene %s could not be opened." % (bandNo, self.ID) )
+            raise ValueError("Requested band %s for scene %s could not be opened." % (bandNo, self.ID))
 
         if masked:
             mask = self.getMask(extent=extent)
@@ -582,6 +96,30 @@ class Scene(object):
                 band = np.where((mask == 1) | (band == self.nodata), np.nan, band)
 
         return band
+
+    def getMask(self, extent=None):
+        """Get cloud mask of scene as numpy array."""
+
+        if os.path.exists(self.fmask):
+            fmask = raster2array(self.fmask, extent)[0]
+        else:
+            return None
+
+        if extent is None:
+            extent = self.extent
+
+        # Mask out 2 - clouds, 3 - shadow and (4 - snow --> Not for Africa)
+
+        mask = np.where((fmask == 2) | (fmask == 3), 1, 0)
+        mask = np.where(np.isnan(fmask), np.nan, mask)
+
+        del fmask
+
+        # Buffer masks
+        mask = binaryBuffer(mask, size=1)
+        mask = removeNoise_oneSide(mask)
+
+        return mask
 
     def createVRT(self, outDir=None):
 
@@ -600,183 +138,309 @@ class Scene(object):
             #os.system(cmd)
             subprocess.call(cmd, shell=True) #universal_newlines=True, stderr=subprocess.STDOUT,
 
-class SentinelScene(Scene):
-    """Object for Sentinel scene """
+    def updateExtent(self, extent):
 
-    def __init__(self, sceneDir, tempDir=None, extentAOI=None):
+        intersectedExtent = intersectRasterExtents(self.extent, extent)
+
+        if intersectedExtent is None:
+            raise RuntimeWarning("Given extent does not overlap with scene.")
+
+        self.extent = intersectedExtent
+
+        # Get metadata
+        self.geotrans[0] = self.extent.ulX
+        self.geotrans[3] = self.extent.ulY
+
+    def calcCloudCoverage(self, AOIextent=None):
+
+        if self.cloudCoverage is None:
+
+            if not os.path.exists(self.fmask):
+                return 1
+
+            fmask = None
+            fmask = raster2array(self.fmask, self.extent)[0]
+
+            nonNANpixels = np.nansum(np.where(np.isnan(fmask), 0, 1))
+
+            # Mask out 2 - clouds, 3 - shadow and 4 - snow
+            mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4), 1, 0)
+
+            # Compute cloud coverate
+            # self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / (float(self.extent.ncol) * float(self.extent.nrow))) * 100.
+            self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / nonNANpixels) * 100.
+
+class SentinelScene(Scene):
+    """Class to handle Sentinel-2 scenes 
+    
+    It does not include the 60 meter bands 1,9 and 10.
+    
+    """
+
+    def __init__(self, sceneDir, ID=None, tempDir=None, extentAOI=None):
 
         Scene.__init__(self, sceneDir, tempDir, extentAOI)
 
         # Scene description
-        self.ID = os.path.basename(sceneDir) + "_" + os.path.basename(os.path.dirname(sceneDir))
-        self.date = dt.strptime(os.path.basename(os.path.dirname(sceneDir)), "%Y%m%d")
-
+        self.ID = ID
+        if ID is not None:
+            self.tileID = self.ID[-6:]
+        else:
+            self.tileID = None
+        self.getMetadata()
         self.getFiles()
-        self.getMetadata(band=4)
+        self.extent = extentAOI
+        self.getGeotrans()
 
         self.nodata = 0.0
 
+    def getMetadata(self):
+
+        if self.dir.endswith(".zip"):
+            zpfile = zipfile.ZipFile(self.dir)
+            metadatafile = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/MTD_TL.xml")
+
+            if len(metadatafile) != 1 and self.tileID is not None:
+                metadatafile = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/*%s.xml" % self.tileID)
+
+            if len(metadatafile) != 1:
+                raise RuntimeError("No metadata file found!")
+
+            # Open metadata file
+            metaF = zpfile.open(metadatafile[0])
+            metainfo = eTree.parse(metaF)
+            rootElement = metainfo.getroot()
+
+            # Get IDs
+            self.ID = [child.text for child in rootElement.iter("TILE_ID")][0]
+            tileIDindex = self.ID.rfind("_T")+1
+            self.tileID = self.ID[tileIDindex:tileIDindex+6]
+
+            # Get date
+            datestring = [child.text for child in rootElement.iter("SENSING_TIME")][0]
+            self.date = dt.strptime(datestring[:10], "%Y-%m-%d")
+
+            metaF.close()
+            zpfile.close()
+
+        else:
+            metadatafile = ""
+            for root, dirs, files in os.walk(self.dir):
+                for f in files:
+                    if f == "MTD_TL.xml" or (self.tileID is not None and f.endswith("*"+self.tileID+".xml")):
+                        metadatafile = os.path.join(root, f)
+
+            if metadatafile == "":
+                raise RuntimeError("No metadata file found!")
+
+            metaF = open(metadatafile)
+            metainfo = eTree.parse(metaF)
+            rootElement = metainfo.getroot()
+
+            datestring = [child.text for child in rootElement.iter("SENSING_TIME")][0]
+            self.date = dt.strptime(datestring[:10], "%Y-%m-%d")
+
+            # Get IDs
+            if self.ID is None:
+                self.ID = [child.text for child in rootElement.iter("TILE_ID")][0]
+                tileIDindex = self.ID.rfind("_T")+1
+                self.tileID = self.ID[tileIDindex:tileIDindex+6]
+
+            metaF.close()
+
     def getFiles(self):
+        """ 
+        BandNo 1: BLUE (Sentinel Band number: 2)
+        BandNo 2: GREEN (3)
+        BandNo 3: RED (4)
+        BandNo 4: Red Edge (5)
+        BandNo 5: Red Edge (6)
+        BandNo 6: Red Edge (7)
+        BandNo 7: NIR (8)
+        BandNo 8: Red Edge 8A (8A)
+        BandNo 9: SWIR1 (11)
+        BandNo 10: SWIR2 (12)
+        """
 
-        # todo: error handling when if files/masks are found
+        bandEndings = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+        optionalBands = ["B02", "B05", "B06", "B07", "B8A"]
+        self.files = []
 
-        # Input files
-        self.files = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*B0[2345678]*.jp2")]
-        self.files += [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*B8A*.jp2")]
-        self.files += [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*B1[12]*.jp2")]
+        if self.dir.endswith(".zip"):
+            zpfile = zipfile.ZipFile(self.dir)
 
-        # Mask files
-        fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.tif")]
-        if len(fmask) != 0:
-            self.fmask = fmask[0]
+            for b in bandEndings:
+                if self.tileID is None:
+                    band = ["/".join(["/vsizip", self.dir, b]) for b in fnmatch.filter(zpfile.namelist(), "*%s*.[Jj][Pp]2" % b)]
+                else:
+                    band = ["/".join(["/vsizip", self.dir, b]) for b in fnmatch.filter(zpfile.namelist(), "*%s*%s*.[Jj][Pp]2" % (self.tileID, b))]
+                if len(band) == 0:
+                    band = None
+                    if b in optionalBands:
+                        warnings.warn("Band %s is missing" % b)
+                    else:
+                        raise IOError("Band %s is missing" % b)
+                else:
+                    band = band[0]
+                self.files.append(band)
+
+            self.fmask = ""
+
+            zpfile.close()
         else:
-            fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.img")]
-            if len(fmask) == 0:
-                self.fmask = ""
-            else:
+
+            for b in bandEndings:
+                band = glob.glob(self.dir + "*/GRANULE/*/IMG_DATA/*%s.[Jj][Pp]2"%b)
+                if len(band) == 0:
+                    band = glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*%s.[Jj][Pp]2" % b)
+                    if len(band) == 0:
+                        band = None
+                        if b in optionalBands:
+                            warnings.warn("Band %s is missing" % b)
+                        else:
+                            raise IOError("Band %s is missing" % b)
+                else:
+                    band = band[0]
+                self.files.append(band)
+
+            #self.files = glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B0[2345678].[Jj][Pp]2")
+            #self.files += glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B8A.[Jj][Pp]2")
+            #self.files += glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B1[12].[Jj][Pp]2")
+            #self.files.sort()
+
+            # Mask files
+            fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.[Tt][Ii][Ff]")]
+            if len(fmask) != 0:
                 self.fmask = fmask[0]
+            else:
+                fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.img")]
+                if len(fmask) == 0:
+                    self.fmask = ""
+                else:
+                    self.fmask = fmask[0]
 
-        shadowMask = [os.path.join(self.maskDir, b) for b in fnmatch.filter(os.listdir(self.maskDir), self.ID + "_shadowMask.tif")]
-        if len(shadowMask) != 0:
-            self.shadowMask = shadowMask[0]
-        else:
-            self.shadowMask = ""
+    def getBand(self, bandNo=1, masked=True, extent=None):
+        """Get specified band of scene as numpy array.
+        
+        BandNo 1: BLUE (Sentinel Band number: 2)
+        BandNo 2: GREEN (3)
+        BandNo 3: RED (4)
+        BandNo 4: Red Edge (5)
+        BandNo 5: Red Edge (6)
+        BandNo 6: Red Edge (7)
+        BandNo 7: NIR (8)
+        BandNo 8: Red Edge 8A (8A)
+        BandNo 9: SWIR1 (11)
+        BandNo 10: SWIR2 (12)
+        """
 
-    def getMask(self, extent=None, withShadow=True):
-        """Get cloud mask of scene as numpy array."""
-
-        if extent is None:
+        if extent == None:
             extent = self.extent
 
-        if os.path.exists(self.fmask):
-            fmask = raster2array(self.fmask, extent)[0]
-        else:
-            fmask = None
+        band = raster2array(self.files[bandNo-1], extent)[0]
 
-        if withShadow:
-            if os.path.exists(self.shadowMask):
-                shadowMask = raster2array(self.shadowMask, extent)[0]
-            else:
-                shadowMask = None
+        if band is None:
+            raise ValueError("Requested band %s for scene %s could not be opened." % (bandNo, self.ID))
 
-            # Mask out 2 - clouds, 3 - shadow and (4 - snow --> Not for Africa)
-            # todo include snow in cloud mask for non african sites
-            if fmask is not None and shadowMask is not None:
-                mask = np.where((fmask == 2) | (fmask == 3) | (shadowMask == 1), 1, 0)
-                mask = np.where((np.isnan(fmask) & np.isnan(shadowMask)), np.nan, mask)
-            elif fmask is None and shadowMask is not None:
-                mask = shadowMask
-            elif shadowMask is None and fmask is not None:
-                mask = np.where((fmask == 2) | (fmask == 3), 1, 0)
-                mask = np.where(np.isnan(fmask), np.nan, mask)
-            else:
-                logging.warning("No masks found.")
-                return None
-            del fmask, shadowMask
-        else:
-            if fmask is not None:
-                mask = np.where((fmask == 2) | (fmask == 3), 1, 0)
-                mask = np.where(np.isnan(fmask), np.nan, mask)
-            else:
-                logging.warning("No masks found.")
-                return None
-            del fmask
+        if masked:
+            mask = self.getMask(extent=extent)
+            if mask is not None:
+                band = np.where((mask == 1) | (band == self.nodata), np.nan, band)
 
-        # Buffer masks
-        mask = binaryBuffer(mask, size=1)
-        mask = removeNoise_oneSide(mask)
-
-        return mask
-
-    def getWatermask(self, extent=None):
-        """Get cloud mask of scene as numpy array."""
-
-        if extent is None:
-            extent = self.extent
-
-        if os.path.exists(self.fmask):
-            fmask = raster2array(self.fmask, extent)[0]
-        else:
-            fmask = None
-
-        # Mask out 2 - clouds, 3 - shadow and 4 - snow
-        if fmask is not None:
-            mask = np.where((fmask == 5), 1, 0).astype("int8")
-
-        else:
-            logging.warning("No fmask found.")
-            return None
-
-        del fmask
-        return mask
-
-    def calcCloudCoverage(self, AOIextent=None):
-
-        if self.cloudCoverage == None:
-
-            if AOIextent is None:
-                AOIextent = self.extent
-
-            mask = self.getMask(extent=AOIextent)
-            if mask is None:
-                return
-
-            # Compute cloud
-            # todo: repace with bottleneck if running on qgis in version 1.0
-            cols = AOIextent.ncol
-            rows = AOIextent.nrow
-            self.cloudCoverage = 100. - (float(np.nansum(mask == 0)) / (float(cols) * float(rows))) * 100.
+        return band
 
 class LandsatScene(Scene):
-    """Object for Landsat scene (Inherits from Scene)"""
+    """Class to handle Landsat scenes
+    
+    This class leaves out the thermal and coastal blue bands (Landsat 8) and
+        
+    """
 
-    def __init__(self, sceneDir, tempDir=None, extentAOI=None):
+    def __init__(self, sceneDir, ID=None, tempDir=None, extentAOI=None):
 
         Scene.__init__(self, sceneDir, tempDir, extentAOI)
 
         # Get files of spectral bands
         self.ID = os.path.basename(sceneDir)[:16]
+        self.tileID = self.ID[3:9]
         self.date = dt.strptime(self.ID[9:16], "%Y%j")
+        self.sensor = self.ID[2]
 
         self.getFiles()
-        self.getMetadata(band=0)
+        self.getGeotrans()
 
     def getFiles(self):
+        """
+        BandNo 1: BLUE (LS8: 2, LS5/7: 1)
+        BandNo 2: GREEN (LS8: 3, LS5/7: 2)
+        BandNo 3: RED (LS8: 4, LS5/7: 3)
+        BandNo 4: NIR (LS8: 5, LS5/7: 4)
+        BandNo 5: SWIR1 (LS8: 6, LS5/7: 5)
+        BandNo 6: SWIR2 (LS8: 7, LS5/7: 7)
+        """
 
         # Files
-        dirname = os.path.basename(self.dir)
         self.files = []
-        if fnmatch.fnmatch(dirname, "L[CO]*"):
-            for filename in fnmatch.filter(os.listdir(self.dir), "*_toa_band[234567]*.tif"):
-                self.files.append(os.path.join(self.dir, filename))
-        elif fnmatch.fnmatch(dirname, "L[ET]*"):
-            for filename in fnmatch.filter(os.listdir(self.dir), "*_toa_band[123457]*.tif"):
-                self.files.append(os.path.join(self.dir, filename))
-        self.files = sorted(self.files)
+
+        if self.sensor == "8":
+            bandEndings = ["B2", "B3", "B4", "B5", "B6", "B7"]
+            optionalBands = ["B2"]
+            for b in bandEndings:
+                band = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*%s*.[Tt][Ii][Ff]" % b)]
+                if len(band) == 0:
+                    band = None
+                    if b in optionalBands:
+                        warnings.warn("Band %s is missing" % b)
+                    else:
+                        raise IOError("Band %s is missing" % b)
+                else:
+                    band = band[0]
+                self.files.append(band)
+
+        else:
+            bandEndings = ["B1", "B2", "B3", "B4", "B5", "B7"]
+            optionalBands = ["B1"]
+            for b in bandEndings:
+                band = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*%s*.[Tt][Ii][Ff]" % b)]
+                if len(band) == 0:
+                    band = None
+                    if b in optionalBands:
+                        warnings.warn("Band %s is missing" % b)
+                    else:
+                        raise IOError("Band %s is missing" % b)
+                else:
+                    band = band[0]
+                self.files.append(band)
 
         # Mask files
-        fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_cfmask_epsg3035.tif")]
+        fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.[Tt][Ii][Ff]")]
         if len(fmask) != 0:
             self.fmask = fmask[0]
         else:
             self.fmask = ""
 
-        shadowMask = [os.path.join(self.maskDir, b) for b in fnmatch.filter(os.listdir(self.maskDir), "*_shadowmask.tif")]
-        if len(shadowMask) != 0:
-            self.shadowMask = shadowMask[0]
-        else:
-            self.shadowMask = ""
+        # shadowMask = [os.path.join(self.maskDir, b) for b in fnmatch.filter(os.listdir(self.maskDir), "*_shadowmask.tif")]
+        # if len(shadowMask) != 0:
+        #     self.shadowMask = shadowMask[0]
+        # else:
+        #     self.shadowMask = ""
 
     def getBand(self, bandNo=1, masked=True, extent=None, transformed=False ):
-        """Get specified band of scene as numpy array."""
+        """Get specified band of scene as numpy array.
+        
+        BandNo 1: BLUE (LS8: 2, LS5/7: 1)
+        BandNo 2: GREEN (LS8: 3, LS5/7: 2)
+        BandNo 3: RED (LS8: 4, LS5/7: 3)
+        BandNo 4: NIR (LS8: 5, LS5/7: 4)
+        BandNo 5: SWIR1 (LS8: 6, LS5/7: 5)
+        BandNo 6: SWIR2 (LS8: 7, LS5/7: 7)
+        
+        """
 
         if extent == None:
             extent = self.extent
 
-        if transformed and os.path.exists(self.transformedScene):
-            band = raster2array(self.transformedScene, extent, bandNo=bandNo)[0]
-        else:
-            band = raster2array(self.files[bandNo-1], extent)[0]
+        band = raster2array(self.files[bandNo-1], extent)[0]
 
         if band is None:
             return None
@@ -787,72 +451,9 @@ class LandsatScene(Scene):
 
         return band
 
-    def getMask(self, extent=None):
-        """Get cloud mask of scene as numpy array."""
-
-        if extent is None:
-            extent = self.extent
-
-        if os.path.exists(self.fmask):
-            fmask = raster2array(self.fmask, extent)[0]
-        else:
-            fmask = None
-
-        if os.path.exists(self.shadowMask):
-            shadowMask = raster2array(self.shadowMask, extent)[0]
-        else:
-            shadowMask = None
-
-        # Mask out 2 - clouds, 3 - shadow and 4 - snow
-        if fmask is not None and shadowMask is not None:
-            mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4 ) | (shadowMask == 1), 1, 0)
-            mask = np.where((np.isnan(fmask) | np.isnan(shadowMask)), np.nan, mask)
-        elif fmask is None and shadowMask is not None:
-            mask = shadowMask
-        elif shadowMask is None and fmask is not None:
-            mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4 ), 1, 0)
-            mask = np.where(np.isnan(fmask), np.nan, mask)
-        else:
-            logging.warning("No masks found.")
-            return None
-
-        # Buffer masks
-        mask = binaryBuffer(mask, size=1)
-        mask = removeNoise_oneSide(mask)
-
-        del fmask, shadowMask
-
-        return mask
-
-    def calcCloudCoverage(self):
-
-        if self.cloudCoverage == None:
-
-            fmask, shadowMask = None, None
-
-            if os.path.exists(self.fmask):
-                fmask = raster2array(self.fmask, self.extent)[0]
-
-            if os.path.exists(self.shadowMask):
-                shadowMask = raster2array(self.shadowMask, self.extent)[0]
-
-            # Mask out 2 - clouds, 3 - shadow and 4 - snow
-            if (shadowMask is not None) and (fmask is not None):
-                mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4 ) | (shadowMask == 1) | np.isnan(shadowMask) | np.isnan(fmask), 1, 0)
-            elif (fmask is None) and (shadowMask is not None):
-                mask = np.where( np.isnan(shadowMask) | (shadowMask==1), 1, 0)
-            elif (shadowMask is None) and (fmask is not None):
-                mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4 ) | np.isnan(fmask), 1, 0)
-            else:
-                logging.warning("No masks found.")
-                return None
-
-            # Compute cloud coverate
-            self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / (float(self.extent.ncol) * float(self.extent.nrow))) * 100.
-
 class extent(object):
 
-    def __init__(self, ulX, ulY, ncol, nrow, pixSize, proj, lrX=None, lrY=None):
+    def __init__(self, ulX, ulY, ncol=None, nrow=None, pixSize=None, proj=None, lrX=None, lrY=None):
         self.ulX = ulX
         self.ulY = ulY
         self.ncol = ncol
@@ -862,123 +463,85 @@ class extent(object):
         self.lrX = lrX
         self.lrY = lrY
 
-        # FUNCTIONS =============================================================
+        # if ncol is None:
+        #     self.ncol = int((self.lrX - self.ulX) / self.pixSize)
+        #
+        # if nrow is None:
+        #     self.nrow = int((self.ulY - self.lrY) / self.pixSize)
+        #
+        # if lrX is None:
+        #     self.lrX = self.ulX + self.pixSize * self.ncol
+        #
+        # if lrY is None:
+        #     self.lrY = self.ulY - self.pixSize * self.nrow
 
-def improveFmask(sce):
-    """ Remove commission errors over water from fmask"
+    def getGeotrans(self):
+        return [self.ulX, self.pixSize, 0.0, self.ulY, 0.0, -self.pixSize]
 
-    :param scene:
-    :return:
-    """
-    try:
-        fmask = raster2array(sce.fmask)[0]
-        red = sce.getBand(3, masked=False, transformed=False).astype("float32")
-        nir = sce.getBand(8, masked=False, transformed=False).astype("float32")
-        swir1 = sce.getBand(10, masked=False, transformed=False).astype("float32")
-    except ValueError,e:
-        logging.warning("Scene %s requested band could not be opened.\n Error message:\n %s" % (sce.ID,e))
+    def getProj(self):
+        return self.proj.ExportToWkt()
 
-    # Calculate NDVI
-    NDVI = (nir - red) / (red + nir)
+    def convertToRasterExtent(self, refScene):
 
-    # Replace values in cloud mask
-    betterFmask = np.where( (swir1 < 600) & ((fmask == 2) | (fmask == 4)), 5, fmask) #(mNDWI < -0.2) &
-    betterFmask = np.where( (NDVI < -0) & (fmask == 3), 5, betterFmask)
+        rasterProj = osr.SpatialReference()
+        rasterProj.ImportFromWkt(refScene.proj)
 
-    # Export file
-    try:
-        dest = os.path.join(sce.dir, sce.ID + "_fmask.tif")
-        array2raster(betterFmask, sce.geotrans, sce.proj, dest, gdal.GDT_Byte, 255)
-    except:
-        print "Scene %s: could not write new fmask to file" % sce.ID
-        logging.warning("Scene %s: could not write new fmask to file" % sce.ID)
+        if self.proj.IsSame(rasterProj) == False:
+            self.ulX, self.ulY = reprojectPoint( self.proj, rasterProj, self.ulX, self.ulY)
+            self.lrX, self.lrY = reprojectPoint( self.proj,rasterProj, self.lrX, self.lrY)
 
-    sce.fmask = dest
+        geoTrans = refScene.geotrans
 
-    return 0
+        # Get raster coordinates of ul and lr corners of feature
+        ras_ulX, ras_ulY = world2Pixel(geoTrans,self.ulX, self.ulY)
+        ras_lrX, ras_lrY = world2Pixel(geoTrans, self.lrX,self.lrY)
 
-# cloud masking
+        # Get geographic coordinates of center of upper left and lower right raster cell
+        self.ulX = (ras_ulX * refScene.pixSize) + geoTrans[0]
+        self.ulY = (ras_ulY * (-1) * refScene.pixSize) + geoTrans[3]
+        self.lrX = (ras_lrX * refScene.pixSize) + geoTrans[0]
+        self.lrY = (ras_lrY * (-1) * refScene.pixSize) + geoTrans[3]
 
-def createCloudWaterMask(redFile, nirFile, extent):
+        # Get number of cols and rows
+        self.ncol = int(ras_lrX - ras_ulX)
+        self.nrow = int(ras_lrY - ras_ulY)
 
-    # Mask clouded pixels over water
-    red = raster2array(redFile, extent)[0]
-    nir = raster2array(nirFile, extent)[0]
+        self.proj = rasterProj
+        self.pixSize = refScene.pixSize
 
-    NDVI = (nir.astype("float32") - red.astype("float32")) / (nir.astype("float32") + red.astype("float32"))
-    invalidPixelMask = np.where((NDVI < 0.1) & (nir > 250), 1, 0)
+        # Check if extent is valid
+        if self.ncol <= 0 or self.nrow <= 0:
+            print("Extent is invalid!")
 
-    del red, nir, NDVI
+# FUNCTIONS =============================================================
 
-    return invalidPixelMask
+def filter_scenes_by_date(scenes, start_date, end_date):
 
-def createCloudMask(maskDir, extent):
-    """ Create joint cloud mask based on fmask and BQA (LS8 only) mask."""
+    filteredScenes = []
+    for sce in scenes:
+        if start_date <= sce.date <= end_date:
+            filteredScenes.append(sce)
+    return filteredScenes
 
-    maskFiles = [os.path.join(maskDir, f) for f in os.listdir(maskDir) if f.endswith('_BQA.TIF') or f.endswith('_cfmask_epsg3035.tif')]
-    if len(maskFiles)==0:
-        return None
+def search_scene_directories(inDir, searchPattern):
+    """ Search for scene directores in input direcotry. Duplicate folders are removed. No recursive search."""
 
-    BQAfile = fnmatch.filter(maskFiles, "*_BQA*.TIF")
-    cfmaskFile = fnmatch.filter(maskFiles, "*_cfmask*.tif")
+    sceneDirs = []
+    for f in os.listdir(inDir):
+        if fnmatch.fnmatch(f, searchPattern):
+            sceneDirs.append(os.path.join(inDir, f))
+    sceneIDs = set([os.path.basename(f).strip(".zip") for f in sceneDirs])
 
-    jointExtent = getJointExtent(maskFiles, AOIextent=extent)
+    # Filter out duplicates
+    duplicates = []
+    for id in sceneIDs:
+        dirs = fnmatch.filter(sceneDirs, "*" + id + "*")
+        if len(dirs) > 1:
+            duplicates += dirs[1:]
 
-    # Create binary mask from BQA file
-    if BQAfile:
-        BQAfile_ = os.path.join(maskDir, BQAfile[0])
-        bqa, geotrans_bqa = raster2array(BQAfile_, jointExtent)
-        if not np.all(np.isnan(bqa)):
-            bqamask = createBQAMask(bqa)
-        if bqamask.shape[1] < extent.ncol or bqamask.shape[0] < extent.nrow:
-            bqamask = padArray(bqamask, geotrans_bqa, extent)
-    else:
-        bqamask = np.ones((extent.nrow, extent.ncol), dtype="float16")
-        bqamask[:] = np.nan
+    sceneDirs = [d for d in sceneDirs if d not in duplicates]
 
-    # Create binary mask form fmask file
-    if cfmaskFile:
-        cfmaskfile_ = os.path.join(maskDir, cfmaskFile[0])
-        fmask, geotrans_cf = raster2array(cfmaskfile_, jointExtent)
-        if not np.all(np.isnan(fmask)):
-            fmask = createfmask(fmask)
-
-        if fmask.shape[1] < extent.ncol or fmask.shape[0] < extent.nrow:
-            fmask = padArray(fmask, geotrans_cf, extent)
-    else:
-        fmask = np.ones((extent.nrow, extent.ncol), dtype="float16")
-        fmask[:] = np.nan
-
-    return np.nanmax(np.array([bqamask, fmask]), axis=0)
-
-def createfmask_sentinel(fmaskFile, extent):
-        """Create Cloud mask from cfmask"""
-
-        jointExtent = getJointExtent(fmaskFile, AOIextent=extent)
-
-        # Read file
-        fmask, geotrans_cf = raster2array(fmaskFile, jointExtent)[:2]
-        if not np.all(np.isnan(fmask)):
-            fmask = np.where((fmask == 2) | (fmask == 3) | (fmask == 255) | np.isnan(fmask), 1, 0).astype("int8")
-
-        if fmask.shape[1] < extent.ncol or fmask.shape[0] < extent.nrow:
-            fmask = padArray(fmask, geotrans_cf, jointExtent.proj, extent)
-
-        return (fmask)
-
-def createBQAMask(bqa):
-    """Create Cloud Mask from Landsat 8 BQA band."""
-    mask = np.where((bqa >= 24576) | (bqa == 1), 1, 0).astype("int8")
-    mask = np.where(np.isnan(bqa), np.nan, mask)
-    return mask
-
-def createfmask(cfmask):
-    """Create Cloud mask from cfmask"""
-    mask = np.where((cfmask == 2) | (cfmask == 4), 1, 0).astype("int8")
-    mask = np.where((cfmask == 255) | (np.isnan(cfmask)), np.nan, mask)
-    return mask
-
-# Binary image methods
+    return sceneDirs
 
 def removeNoise(binary_img, iterations=2):
     """Remove noise in binary image."""
@@ -1009,8 +572,6 @@ def binaryBuffer_negative(binary_img, size=1):
     struct2 = ndimage.generate_binary_structure(2, 2)
     buffered_img = np.logical_not(ndimage.morphology.binary_dilation(np.logical_not(binary_img), iterations=size, structure=struct2))
     return np.where(np.isnan(binary_img), np.nan, buffered_img )
-
-# Raster Input / Output
 
 def raster2array(rasterPath, AOIExtent=None, bandNo=1):
     """ Load and clip band from raster
@@ -1288,189 +849,6 @@ def padArray(array, geoTransOfArray, projArray, AOIextent):
 
     return newArray
 
-# File system search for scene directories
-
-def searchSceneDirs_sentinel(inDir):
-    sceneDirs = []
-    for root, dirs, files in os.walk(inDir):
-        for f in files:
-            if f.endswith("metadata.xml"):
-                sceneDirs.append(root)
-    return sceneDirs
-
-# todo adapt to longer periods
-def getSceneDirsForSeason_sentinel(sceneDirs, year, month, period=0):
-
-    #start_month = (month - period)
-    #end_month = (month + period + 1)
-    months = [12,1,2,3,4,5,6,7,8,9,10,11,12,1]
-
-    # Images for season
-    seasonFiles =[]
-    for d in sceneDirs:
-        date = dt.strptime(os.path.basename(os.path.dirname(d)), "%Y%m%d")
-        if year == 0:
-            if date.month in months[month-period:month+period+1]:
-                seasonFiles.append(d)
-        elif month == 0:
-            if (date.year == year):
-                seasonFiles.append(d)
-        elif period != 0:
-            if month == 1:
-                if (date.year == year-1 and date.month == 12) or (date.year == year and date.month == month) or (date.year == year and date.month == month+1):
-                    seasonFiles.append( d)
-            elif month == 12:
-                if (date.year == year+1 and date.month == 1) or (date.year == year and date.month == month) or (date.year == year and date.month == month-1):
-                    seasonFiles.append( d)
-            elif (date.year == year) and (date.month in months[month-period: month+period+1]):
-                seasonFiles.append(d)
-        else:
-            if(date.year == year) and (date.month == month):
-                seasonFiles.append(d)
-
-    return sorted(seasonFiles)
-
-def getSceneDirsForSeason(sceneDirs, year, month, period=1):
-
-    months = [12,1,2,3,4,5,6,7,8,9,10,11,12,1]
-
-    # Images for season
-    seasonFiles =[]
-    for dir in sceneDirs:
-        date = dt.strptime(os.path.basename(dir)[9:16], "%Y%j")
-        if year == 0:
-            if (date.month in months[month-period:month+period+1]):
-                seasonFiles.append( dir)
-        elif month == 0:
-            if (date.year == year):
-                seasonFiles.append( dir)
-        else:
-            if month == 1:
-                if (date.year == year-1 and date.month == 12) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month+1):
-                    seasonFiles.append( dir)
-            elif month == 12:
-                if (date.year == year+1 and date.month == 1) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month-1):
-                    seasonFiles.append( dir)
-            else:
-                if (date.year == year) and (date.month in range(month-period, month+period+1)):
-                    seasonFiles.append( dir)
-
-    return sorted(seasonFiles)
-
-def getSceneDirs(rootDir, sceneList):
-    """Get all scene directories of scenes in a list of scene IDs."""
-    # Create full scene paths
-    sceneDirs = []
-    for sce in sceneList:
-        scenePath = sce[3:6]
-        sceneRow = sce[6:9]
-        sensor = sce[0:3]
-        sceneRoot = os.path.join(rootDir, scenePath + "_" + sceneRow, sensor)
-        #sceneDir = [os.path.join(sceneRoot, dir) for dir in os.listdir(sceneRoot) if dir.startswith(sce[0:16]) and os.path.isdir(os.path.join(sceneRoot, dir))]
-        sceneDir = os.path.join(sceneRoot, sce[0:16])
-        if os.path.exists(sceneDir):
-            sceneDirs.append(sceneDir)
-        else:
-            logging.warning("%s not found." % sce[0:16])
-
-    return sceneDirs
-
-
-# adapt to sentinel
-def filterSceneDirs_Sentinel(directory, year, month, sceneDirs=None):
-
-    # Images for season
-    sceneDirs_season =[]
-
-    if sceneDirs is None:
-        sceneDirs = [dir for dir in fnmatch.filter(os.listdir(directory), "L*") if os.path.isdir(os.path.join(directory, dir))]
-
-    for dir in sceneDirs:
-        date = dt.strptime(os.path.basename(os.path.dirname(dir)), "%Y%m%d")
-        if month == 1:
-            if (date.year == year-1 and date.month == 12) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month+1):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        elif month == 12:
-            if (date.year == year+1 and date.month == 1) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month-1):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        elif month == 0:
-            if (date.year == year):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        else:
-            if (date.year == year) and (date.month in range(month-1, month+2)):
-                sceneDirs_season.append(os.path.join(directory, dir))
-
-    return sorted(sceneDirs_season)
-
-def filterSceneDirs_Landsat(directory, year, month, sceneDirs=None):
-
-    # Images for season
-    sceneDirs_season =[]
-
-    if sceneDirs is None:
-        sceneDirs = [dir for dir in fnmatch.filter(os.listdir(directory), "L*") if os.path.isdir(os.path.join(directory, dir))]
-
-    for dir in sceneDirs:
-        date = dt.strptime(os.path.basename(dir)[9:16], "%Y%j")
-        if month == 1:
-            if (date.year == year-1 and date.month == 12) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month+1):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        elif month == 12:
-            if (date.year == year+1 and date.month == 1) or (date.year == year   and date.month == month) or (date.year == year   and date.month == month-1):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        elif month == 0:
-            if (date.year == year):
-                sceneDirs_season.append(os.path.join(directory, dir))
-        else:
-            if (date.year == year) and (date.month in range(month-1, month+2)):
-                sceneDirs_season.append(os.path.join(directory, dir))
-
-    return sorted(sceneDirs_season)
-
-def findSceneDirsByList_Landsat(rootDir, sceneList):
-
-    # Create full scene paths
-    sceneDirs = []
-    for sce in sceneList:
-        #scenePath = sce[3:6]
-        #sceneRow = sce[6:9]
-        # todo adapt if folder structure changes (subfolders for row and path)
-        #sceneRoot = os.path.join(rootDir, scenePath + "_" + sceneRow)
-        sceneDir = [os.path.join(rootDir, dir) for dir in os.listdir(rootDir) if dir.startswith(sce) and os.path.isdir(os.path.join(rootDir, dir))]
-        if len(sceneDir) > 1:
-            raise Warning ("Too many directories for scene %s found" % sce)
-        elif len(sceneDir) < 1:
-            raise Warning ("%s not found." % sceneDir)
-        else:
-            if os.path.exists(sceneDir[0]):
-                sceneDirs.append(sceneDir[0])
-            else:
-                raise Warning ("%s not found." % sceneDir)
-
-    return sceneDirs
-
-def findSceneDirsByList_Sentinel(rootDir, sceneList):
-
-    # Create full scene paths
-    sceneDirs = []
-    for sce in sceneList:
-        sceneID = sce[:5]
-        sceneDate = sce[6:14]
-        sceneDir = [os.path.join(rootDir, dir) for dir in fnmatch.filter(os.listdir(rootDir), sceneID + "*" + sceneDate + "*")]
-        if len(sceneDir) > 1:
-            raise Warning ("Too many directories for scene %s found" % sce)
-        elif len(sceneDir) < 1:
-            raise Warning ("%s not found." % sceneDir)
-        else:
-            if os.path.exists(sceneDir[0]):
-                sceneDirs.append(sceneDir[0])
-            else:
-                raise Warning ("%s not found." % sceneDir)
-
-    return sceneDirs
-
-# Extent calculation
-
 def intersectRasterExtents(extent1, extent2):
 
     # todo check if projections of extents are the same
@@ -1678,96 +1056,21 @@ def convertShapeExtentToRasterExtent(shapePath, rasterPath, attributeName=None, 
         else:
             return extent(ulX, ulY, int(ncol), int(nrow), pixSize, projRaster, lrX, lrY)
 
-def getSubExtents(mainExtent, step):
-
-    ulX = mainExtent.ulX
-    startY = mainExtent.ulY
-    ncols = mainExtent.ncol
-    nrows = mainExtent.nrow
-    lrX = mainExtent.lrX
-    lrY = mainExtent.lrY
-    pixSize = mainExtent.pixSize
-
-    if step <= 0:
-        print "Error: Step size must be positive."
-        return
-
-    subextents =[]
-    if nrows <= step:
-        subextents.append(mainExtent)
-        return subextents
-
-    endY = startY + (-1) * pixSize * nrows
-    stepY = (-1) * pixSize * step
-
-    # Define size of data chunks (number of lines to process within each iteration)
-    lolim = np.arange(startY, endY, stepY)
-    uplim = np.arange(startY+stepY, endY, stepY)
-    nLoops = len(uplim)
-
-    # Get coordinatsubextents
-    for i in range(0, nLoops):
-        subextent = extent(ulX, lolim[i], ncols, step,  pixSize, mainExtent.proj, lrX, uplim[i])
-        subextents.append(subextent)
-
-    # Last subextent
-    if uplim[nLoops-1] != endY:
-        lastStep = int((endY - uplim[nLoops-1]) / ((-1)*pixSize))
-        subextent = extent(ulX, uplim[nLoops-1], ncols, lastStep, pixSize,mainExtent.proj, lrX, endY)
-        subextents.append(subextent)
-
-    return subextents
-
-def transformProjections(scenes):
-    # Check if raster files have same projection
-    projs = [sce.proj for sce in scenes]
-    uniqueProjs = set(projs)
-    if len(uniqueProjs) == 1:
-        print "All files share same projection. Nothing to do."
-        return 0
-
-    # Get one projection as reference
-    refProj = osr.SpatialReference()
-    refProj.ImportFromWkt(next(iter(uniqueProjs)))
-    refProj_wkt = refProj.ExportToWkt()
-
-    # Convert all rater files (change geotrans and proj attributes)
-    for sce in scenes:
-        targetProj = osr.SpatialReference()
-        targetProj.ImportFromWkt(sce.proj)
-
-        if not targetProj.IsSame(refProj):
-            sce.proj = refProj_wkt
-            x,y = sce.geotrans[0], sce.geotrans[3]
-
-            newX, newY = reprojectPoint(targetProj, refProj, x, y)
-
-            sce.geotrans[0] = newX
-            sce.geotrans[3] = newY
-
-    # Check if all projections are the same now
-    projs = [sce.proj for sce in scenes]
-    uniqueProjs = set(projs)
-    if len(uniqueProjs) == 1:
-        print "Transformation successful!"
-        return 0
-
-# Miscellaneous
-
-def createVRT(inFiles, outfile, AOIextent=None):
+def createVRT(inFiles, outfile, AOIextent=None, separate=True):
     """Create a vrt file of several input files for specified extent. """
-    if AOIextent != None:
-        cmd = "gdalbuildvrt -separate -te " + str(AOIextent.ulX) + " " + str(AOIextent.lrY) + " " + str(AOIextent.lrX) + " " + str(AOIextent.ulY) + " " + outfile + " " + " ".join(inFiles)
+
+    if separate:
+        if AOIextent != None:
+            cmd = "gdalbuildvrt -separate -te " + str(AOIextent.ulX) + " " + str(AOIextent.lrY) + " " + str(AOIextent.lrX) + " " + str(AOIextent.ulY) + " " + outfile + " " + " ".join(inFiles)
+        else:
+            cmd = "gdalbuildvrt -separate " + outfile + " " + " ".join(inFiles)
     else:
-        cmd = "gdalbuildvrt -separate " + outfile + " " + " ".join(inFiles)
+        if AOIextent != None:
+            cmd = "gdalbuildvrt -te " + str(AOIextent.ulX) + " " + str(AOIextent.lrY) + " " + str(AOIextent.lrX) + " " + str(AOIextent.ulY) + " " + outfile + " " + " ".join(inFiles)
+        else:
+            cmd = "gdalbuildvrt " + outfile + " " + " ".join(inFiles)
 
-    os.system(cmd)
-
-    # Choose masked band
-    # outfile2 = outfile[:-4] + "_masked.vrt"
-    # idx_mask = len(inFiles)
-    # cmd = "gdal_translate -of vrt " + outfile + " -mask " + str(idx_mask) + " " + outfile2 + " --config GDAL_TIFF_INTERNAL_MASK YES"
-    # os.system(cmd)
+    subprocess.call(cmd, shell=True)  # universal_newlines=True, stderr=subprocess.STDOUT,
 
     return (outfile)
 
@@ -1784,204 +1087,3 @@ def downsample(a, a_pixSize, out_pixSize):
 
     sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
     return a.reshape(sh).mean(-1).mean(1)
-
-def calcMetrics(stack):
-    """Compute metrics of numpy stack
-
-    :param: stack
-
-    :return: metrics
-    """
-    metrics = []
-    # Mean
-    metrics.append(bn.nanmean(stack, axis=0))
-    # Median
-    metrics.append(bn.nanmedian(stack, axis=0))
-    # Standard Deviation
-    metrics.append(bn.nanstd(stack, axis=0))
-    # Sum
-    metrics.append(bn.nansum(stack, axis=0))
-    # Maximum and point of time
-    metrics.append(bn.nanmax(stack, axis=0))
-    # TODO: fix argmin und argmax -> value error when all-nan-slice encountered
-    #try:
-    #    metrics.append(bn.nanargmax(stack, axis=0))
-    #except:
-    #    pass
-    # Minimum and point of time
-    metrics.append(bn.nanmin(stack, axis=0))
-    #try:
-    #    metrics.append(bn.nanargmin(stack, axis=0))
-    #except:
-    #    pass
-    # Percentile
-    allNaN = bn.allnan(stack, axis=0)
-    percentiles = nan_percentile(np.array(stack, copy=True), [25,5,95])
-    metrics.append(np.where(allNaN, np.nan, percentiles[0]))
-    metrics.append(np.where(allNaN, np.nan, percentiles[1]))
-    metrics.append(np.where(allNaN, np.nan, percentiles[2]))
-
-    return metrics
-
-# Percentile calculation
-
-def nan_percentile(arr, q):
-    """ Function to calcualte percentil of numpy stack faster than using numpy.percentile
-
-        taken from http://krstn.eu/np.nanpercentile()-there-has-to-be-a-faster-way/ and
-        http://stackoverflow.com/questions/32089973/numpy-index-3d-array-with-index-of-last-axis-stored-in-2d-array
-
-    """
-
-    # valid (non NaN) observations along the first axis
-    no_obs = bn.allnan(arr, axis=0)
-    valid_obs = np.sum(np.isfinite(arr), axis=0)
-    # replace NaN with maximum
-    max_val = np.nanmax(arr)
-    arr[np.isnan(arr)] = max_val
-    # sort - former NaNs will move to the end
-    arr = np.sort(arr, axis=0)
-
-    # loop over requested quantiles
-    if type(q) is list:
-        qs = []
-        qs.extend(q)
-    else:
-        qs = [q]
-    if len(qs) < 2:
-        quant_arr = np.zeros(shape=(arr.shape[1], arr.shape[2]))
-    else:
-        quant_arr = np.zeros(shape=(len(qs), arr.shape[1], arr.shape[2]))
-
-    result = []
-    for i in range(len(qs)):
-        quant = qs[i]
-        # desired position as well as floor and ceiling of it
-        k_arr = (valid_obs - 1) * (quant / 100.0)
-        k_arr = np.where(k_arr < 0, 0, k_arr)
-        f_arr = np.floor(k_arr).astype(np.int32)
-        c_arr = np.ceil(k_arr).astype(np.int32)
-        fc_equal_k_mask = (f_arr == c_arr)
-
-        # linear interpolation (like numpy percentile) takes the fractional part of desired position
-        floor_val = _zvalue_from_index_ogrid(arr=arr, ind=f_arr) * (c_arr - k_arr)
-        ceil_val = _zvalue_from_index_ogrid(arr=arr, ind=c_arr) * (k_arr - f_arr)
-
-        # If choose does not work, use _zvalue_from_index (not working however)
-        #floor_val = f_arr.choose(arr) * (c_arr - k_arr)
-        #ceil_val = c_arr.choose(arr) * (k_arr - f_arr)
-
-        quant_arr = floor_val + ceil_val
-        quant_arr[fc_equal_k_mask] = _zvalue_from_index_ogrid(arr=arr, ind=k_arr.astype(np.int32))[fc_equal_k_mask]  # if floor == ceiling take floor value
-        # quant_arr[fc_equal_k_mask] = k_arr.astype(np.int32).choose(arr)[fc_equal_k_mask]
-        quant_arr = np.where(no_obs, np.nan, quant_arr)
-
-        result.append(quant_arr)
-
-    return result
-
-def _zvalue_from_index_ogrid(arr, ind):
-    y = arr.shape[1]
-    x = arr.shape[2]
-    y,x =np.ogrid[0:y, 0:x]
-
-    return arr[ind, y, x]
-
-def indexByPercentile(arr, quant):
-    """Calculate percentile of numpy stack and return the index of the chosen pixel. """
-    #valid (non NaN) observations along the first axis
-    arr_tmp = np.array(arr, copy=True)
-
-    #no_obs = bn.allnan(arr_tmp["data"], axis=0)
-    valid_obs = np.sum(np.isfinite(arr_tmp["data"]), axis=0)
-    # replace NaN with maximum
-    max_val = np.nanmax(arr_tmp["data"]) + 1
-    arr_tmp["data"][np.isnan(arr_tmp["data"])] = max_val
-    # sort - former NaNs will move to the end
-    arr_tmp = np.sort(arr_tmp, kind="mergesort", order="data", axis=0)
-    arr_tmp["data"] = np.where(arr_tmp["data"]==max_val, np.nan, arr_tmp["data"])
-
-    # desired position as well as floor and ceiling of it
-    k_arr = (valid_obs - 1) * (quant / 100.0)
-    k_arr = np.where(k_arr < 0, 0, k_arr)
-    f_arr = np.floor(k_arr + 0.5)
-    f_arr = f_arr.astype(np.int)
-
-    # get floor value of reference band and index band
-    floor_val = _zvalue_from_index_ogrid(arr=arr_tmp, ind=f_arr.astype("int16"))
-    idx = np.where(valid_obs==0, 255, floor_val["ID"])
-
-    quant_arr = floor_val["data"]
-
-    del arr_tmp
-
-    return (quant_arr, idx, valid_obs)
-
-def index_interpolation(arr, quant):
-    #valid (non NaN) observations along the first axis
-    arr_tmp = np.array(arr, copy=True)
-
-    no_obs = bn.allnan(arr_tmp["data"], axis=0)
-    valid_obs = np.sum(np.isfinite(arr_tmp["data"]), axis=0)
-    # replace NaN with maximum
-    max_val = np.nanmax(arr_tmp["data"]) + 1
-    arr_tmp["data"][np.isnan(arr_tmp["data"])] = max_val
-    # sort - former NaNs will move to the end
-    arr_tmp = np.sort(arr_tmp, kind="mergesort", order="data", axis=0)
-    arr_tmp["data"] = np.where(arr_tmp["data"]==max_val, np.nan, arr_tmp["data"])
-
-    # desired position as well as floor and ceiling of it
-    k_arr = (valid_obs - 1) * (quant / 100.0)
-    k_arr = np.where(k_arr < 0, 0, k_arr)
-    f_arr = np.floor(k_arr).astype(np.int32)
-    c_arr = np.ceil(k_arr).astype(np.int32)
-
-    #z_arr = np.where(k_arr%1 >= 0.5, c_arr, f_arr)
-
-    # get floor value of reference band and index band
-    floor_val = _zvalue_from_index_ogrid(arr=arr_tmp, ind=f_arr)
-    f_idx = np.where(valid_obs==0, 255, floor_val["ID"])
-    ceil_val = _zvalue_from_index_ogrid(arr=arr_tmp, ind=c_arr)
-    c_idx = np.where(valid_obs==0, 255, ceil_val["ID"])
-    k_idx = k_arr%1
-
-    del arr_tmp
-
-    return (f_idx, c_idx, k_idx, valid_obs)
-
-def get_interpolatedIndexValue(arr, f_idx, c_idx, k_idx):
-
-    # linear interpolation (like numpy percentile) takes the fractional part of desired position
-    floor_val = np.nanmax(np.where(arr["ID"] == f_idx, arr["data"], np.nan), axis=0) * (1-k_idx)
-    ceil_val = np.nanmax(np.where(arr["ID"] == c_idx, arr["data"], np.nan), axis=0) * k_idx
-
-    quant_arr = floor_val + ceil_val
-
-    return quant_arr
-
-def downsample(a, a_pixSize, out_pixSize):
-    """Resample image to lower resolution
-
-        :param a array
-        :param a_pixSize Pixel size of source array
-        :param out_pixSize Pixel size of output array
-
-        :rtype ndarray
-    """
-    shape = (int(a.shape[0] * a_pixSize / out_pixSize), int(a.shape[1] * a_pixSize / out_pixSize))
-
-    sh = shape[0],a.shape[0]//shape[0],shape[1],a.shape[1]//shape[1]
-
-    return a.reshape(sh).mean(-1).mean(1)
-
-def rescale(index):
-    # Take 1st and 99th percentile for clipping the range
-    minVal = np.nanpercentile(index, 1) #rsu.nan_percentile(index, 1)
-    maxVal = np.nanpercentile(index, 99) # rsu.nan_percentile(index, 99)
-    # Replace min/max values
-    index = np.where((index > maxVal), maxVal, index)
-    index = np.where((index < minVal), minVal, index)
-    # Normalization
-    index_scaled = (index - minVal) / (maxVal - minVal) * 2000. - 1000.
-
-    return index_scaled
