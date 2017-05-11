@@ -8,11 +8,13 @@
 
 ##Number_of_Cores_for_Processing = number 2
 ##Number_of_Trees = number 150
+##showplots
 
 
 # Check for packages required, and if they are not installed, instal them.
 tryCatch(find.package("maptools"), error=function(e) install.packages("maptools", lib=file.path(.Library[1])))
 tryCatch(find.package("randomForest"), error=function(e) install.packages("randomForest", lib=file.path(.Library[1])))
+tryCatch(find.package("caret"), error=function(e) install.packages("caret", lib=file.path(.Library[1])))
 tryCatch(find.package("snow"), error=function(e) install.packages("snow", lib=file.path(.Library[1])))
 tryCatch(find.package("snowfall"), error=function(e) install.packages("snowfall", lib=file.path(.Library[1])))
 tryCatch(find.package("tcltk"), error=function(e) install.packages("tcltk", lib=file.path(.Library[1])))
@@ -81,6 +83,8 @@ pb <- tkProgressBar("Random Forest Progress", "Training Random Forest Model", 0,
 RandomForestModel <- randomForest(data[,1:(ncol(data)-1)], as.factor(data$LUC), ntree=Number_of_Trees, importance=T, scale=F)
 close(pb)
 
+#variable importance 
+varImpPlot(RandomForestModel)
 
 # get out-of-bag error
 OOBE<-as.data.frame(RandomForestModel[[5]])
@@ -94,10 +98,10 @@ gc()
 
 # mask the resulting classification
 if (Mask_Raster!=''){
-pb <- tkProgressBar(Random Forest Progress", "Applying Mangrove Mask", 0, 100, 50)
+
 msk<-raster(Mask_Raster)
 map_rf <- mask(map_rf, msk, progress='window')
-close(pb)
+
 }
 
 Output_Raster<-map_rf
