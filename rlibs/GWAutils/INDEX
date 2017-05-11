@@ -1,0 +1,6 @@
+aggregateIndices        Calculate water / wetness probability
+getWaterMask            A Cat Function
+getWetMask              Wetness detection
+rescale01               A Cat Function
+sigmoid                 Sigmoid
+sigmoid01               Sigmoid
