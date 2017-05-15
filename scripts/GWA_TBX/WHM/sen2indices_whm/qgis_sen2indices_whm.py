@@ -1,6 +1,6 @@
 #Definition of inputs and outputs
 #==================================
-##Sentinel 2 Indices for WHM=name
+##Sentinel 2 Indices WHM=name
 ##Sentinel Tools=group
 ##ParameterRaster|input|Input Reflectance Stack|False
 ##OutputDirectory|outputDirectory|Folder to save the stack of Indices
