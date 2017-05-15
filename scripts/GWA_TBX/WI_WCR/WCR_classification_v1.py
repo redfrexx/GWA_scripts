@@ -21,16 +21,25 @@
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
 ##*ParameterString|endDate|End date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
+##*ParameterBoolean|spring|Include spring scenes|True
+##*ParameterBoolean|summer|Include summer scenes|True
+##*ParameterBoolean|fall|Include fall scenes|True
+##*ParameterBoolean|winter|Include winter scenes|True
 
 debug = False
 
 # test paths
 if debug:
-    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\WaterWetnessMasks_wat500_wet500_win1800_mmu3"
-    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2"
+    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
+    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
     exportSeasonalFrequencies = True
-    startDate = "20160101"
+    startDate = "20170101"
     endDate = "20171231"
+    spring = False
+    summer = True
+    fall = True
+    winter = True
+    here = "."
 
 import os, sys
 import numpy as np
@@ -40,13 +49,13 @@ import gdal
 from shutil import copyfile
 from os.path import expanduser
 import datetime as dt
+import time
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
+    here = os.path.dirname(scriptDescriptionFile)
 
 # Load additional library
-# here = "."
-here = os.path.dirname(scriptDescriptionFile)
 pyDir = os.path.join(here, 'data', 'python')
 if pyDir not in sys.path:
     sys.path.append(pyDir)
@@ -111,6 +120,30 @@ if exportSeasonalFrequencies:
     if not os.path.exists(pathOUT_freqs):
         os.mkdir(pathOUT_freqs)
 
+progress.setText(pathOUT_class)
+
+# Check start and end dates ---------------------------------------------------------------------------------------------------------------------------------
+if startDate == "":
+    startDate = None
+else:
+    try:
+        startDate = dt.datetime.strptime(startDate, "%Y%m%d")
+    except:
+        if not debug:
+            raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'Start date' is not valid.")
+
+if endDate == "":
+    endDate = None
+else:
+    try:
+        endDate = dt.datetime.strptime(endDate, "%Y%m%d")
+    except:
+        if not debug:
+            raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'End date' is not valid.")
+
+if endDate < startDate:
+    raise GeoAlgorithmExecutionException("Invalid input parameters: 'Start date'  must be earlier than 'End date'.")
+
 
 # WATER occurance and frequency =========================================================
 
@@ -134,16 +167,20 @@ geotrans, proj = rsu.raster2array(waterMaskFiles[0], jointExtent)[1:3]
 waterFreqs = []
 validPixels = []
 
-seasons = {"winter":[12,1,2],"spring":[3,4,5],"summer":[6,7,8],"fall":[9,10,11]}
-for sname in seasons:
-    print(sname)
+seasons = [["winter",[12,1,2],winter],["spring",[3,4,5], spring],["summer",[6,7,8], summer],["fall",[9,10,11], fall]]
+for season in seasons:
+
+    if not season[2]:
+        continue
+
+    print(season[0])
 
     waterMasks_season = []
     for f in waterMaskFiles:
         f_name = os.path.basename(f)
         dateidx = f_name.find("_d")
         date = dt.datetime.strptime(f_name[dateidx+2:dateidx+10], "%Y%m%d")
-        if (date.month in seasons[sname]):
+        if (date.month in season[1]) and (startDate is None or (startDate <= date)) and (endDate is None or (endDate >= date)):
             waterMasks_season.append(f)
 
     if len(waterMasks_season) == 0:
@@ -155,10 +192,9 @@ for sname in seasons:
     waterFreqs.append(waterFreq)
     validPixels.append(validObs)
 
-
     # Export to file
     if exportSeasonalFrequencies:
-        dest = os.path.join(pathOUT_freqs, "WCR_waterFrequency_"+sname+".tif")
+        dest = os.path.join(pathOUT_freqs, "WCR_waterFrequency_"+season[0]+".tif")
         rsu.array2raster(waterFreq, geotrans, proj, dest, gdal.GDT_Byte, 255)
 
         # qml file
@@ -174,6 +210,12 @@ del waterFreqs
 validPixels = np.array(validPixels)
 validObs = np.nansum(validPixels, axis=0)
 
+if np.nansum(validObs) == 0:
+    if not debug:
+        raise GeoAlgorithmExecutionException("No water masks found")
+    else:
+        print("No water masks found.")
+        sys.exit(1)
 
 # CLASSIFICATION
 

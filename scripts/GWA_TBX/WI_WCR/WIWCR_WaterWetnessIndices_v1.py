@@ -18,7 +18,7 @@
 ##ParameterFile|path_imagery|Directory containing imagery|True|False
 ##ParameterSelection|sensor|Sensor|Sentinel-2;Landsat 5/7/8|Sentinel-2
 ##ParameterSelection|AOItype|Type of AOI|Shapefile;User defined extent;Joint extent of all scenes
-##ParameterFile|path_AOI|Shapefile containing AOI (Area of Interest)|False|True|shp
+##ParameterVector|path_AOI|Shapefile containing AOI (Area of Interest)
 ##ParameterExtent|extentCoords|User defined Extent||True
 ##OutputDirectory|path_output|Output directory
 ##*ParameterNumber|maxCloudCover|Maximum Cloud Coverage|0|100|100
@@ -40,10 +40,12 @@ if debug:
     maxCloudCover = 80.
     tileID = ""
     WCRonly = True
-    extentCoords = [-5674754.41223,-5652676.4399,2303186.64763,2325264.61996]
+    extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
+    projWkt = 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]'
     startDate = ""
     endDate = ""
     AOItype=0
+    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX_v1"
 
 # IMPORTS ----------------------------------------------------------------------------------------------
 import os, sys
@@ -56,8 +58,9 @@ from datetime import datetime as dt
 import zipfile
 
 # Load additional library
-#here = os.path.dirname(scriptDescriptionFile)
-here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX_v1"
+if not debug:
+    here = os.path.dirname(scriptDescriptionFile)
+
 pyDir = os.path.join(here, 'data', 'python')
 if pyDir not in sys.path:
     sys.path.append(pyDir)
@@ -78,7 +81,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         os.mkdir(outputDir)
 
     # Make file title
-    outputName = scene.tileID + "_" + dt.strftime(scene.date, "%Y%m%d")
+    outputName = scene.sensorCode + "_" + scene.tileID + "_" + dt.strftime(scene.date, "%Y%m%d")
 
     # Read in bands
     bands = []
@@ -253,7 +256,15 @@ if sensor == "Sentinel":
     sceneDirs = rsu.search_scene_directories(path_imagery, "S2[AB]*")
     sceneDirs2 = []
     for i,sceD in enumerate(sceneDirs):
-        zpfile = zipfile.ZipFile(sceD)
+        try:
+            zpfile = zipfile.ZipFile(sceD)
+        except Exception,e:
+            if not debug:
+                raise GeoAlgorithmExecutionException("Invalid input data: Invalid file in 'Directory containing imagery': %s " % sceD)
+            else:
+                print("Invalid input data: Invalid file in 'Directory containing imagery': %s" % sceD)
+                sys.exit(1)
+
         metadatafile = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/MTD_TL.xml")
         if len(metadatafile) == 0:
             xmlfiles = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/S2*.xml")
@@ -276,7 +287,7 @@ scenes = []
 for sD in sceneDirs:
 
     if not debug:
-        progress.setText("%s" % sD[0])
+        progress.setText("%s / %s" % (sD[0], sD[1]))
 
     try:
         if sensor == "Landsat":
@@ -345,8 +356,10 @@ if AOItype == 0:
         sys.exit(1)
         
 elif AOItype == 1:
-    projWkt = qgis.utils.iface.mapCanvas().mapRenderer().destinationCrs().toWkt()
-    #projWkt = 'PROJCS["WGS 84 / UTM zone 36N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",33],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32636"]]'
+    extentCoords = [float(coord) for coord in extentCoords.split(",")]
+    if not debug:
+        projWkt = qgis.utils.iface.mapCanvas().mapRenderer().destinationCrs().toWkt()
+
     projExtent = osr.SpatialReference()
     projExtent.ImportFromWkt(projWkt)
     extentAOI = rsu.extent(ulX=extentCoords[0], ulY=extentCoords[3], lrX=extentCoords[1], lrY=extentCoords[2], proj=projExtent)
@@ -356,7 +369,17 @@ elif AOItype == 1:
         if not debug:
             progress.setText("Invalid input parameter: User defined extent is invalid.")
         sys.exit(1)
-        
+
+    # Create folder for extents
+    path_output_extents = os.path.join(path_output, "userDefinedExtents")
+    if not os.path.exists(path_output_extents):
+        os.mkdir(path_output_extents)
+    extent_name = "userDefinedExtent_" + dt.today().strftime("%Y%m%d-h%Hm%M")
+    extentAOI.save_as_shp(path_output_extents, extent_name)
+
+    if not debug:
+        layer = qgis.utils.iface.addVectorLayer(os.path.join(path_output_extents, extent_name+".shp"), extent_name, "ogr")
+
 else:
     # use swir2 bands as reference for geotransformation. Must be provided.
     exBands = [sce.files[-1] for sce in scenes]
@@ -382,11 +405,11 @@ for sce in scenes:
         continue
 
     # Check whether scene has enough valid pixels within AOI
-    sce.calcCloudCoverage()
-    if sce.cloudCoverage > maxCloudCover:
-        print "Cloud coverage of scene %s too high. Scene is skipped." % newScene.ID
+    #sce.calcCloudCoverage()
+    if sce.cloudy > maxCloudCover:
+        print "Cloud coverage too high. Scene is skipped." % newScene.ID
         if not debug:
-            progress.setText("Cloud coverage of scene %s too high. Scene is skipped." % newScene.ID)
+            progress.setText("Cloud coverage too high. Scene is skipped." % newScene.ID)
             continue
 
     scenesWithinExtent.append(sce)
@@ -395,10 +418,10 @@ for sce in scenes:
 scenes = scenesWithinExtent
 if len(scenes) == 0:
     if not debug:
-        raise GeoAlgorithmExecutionException("No %s scenes found that match the selection criteria. Adjust the selection parameters." % sensor)
+        raise GeoAlgorithmExecutionException("Invalid input data: No %s scenes found that match the selection criteria." % sensor)
         sys.exit(1)
     else:
-        print "No %s scenes found that match the selection criteria. Adjust the selection parameters." % sensor
+        print "Invalid input data: No %s scenes found that match the selection criteria." % sensor
 
 if not debug:
     progress.setPercentage(10)
@@ -439,10 +462,16 @@ for date in uniqueDates:
     for index in indexFolders:
         inFiles = [os.path.join(path_indices, index, f) for f in fnmatch.filter(os.listdir(os.path.join(path_indices, index)), "*" + dt.strftime(date, "%Y%m%d") + "*.tif")]
 
+        if len(inFiles) == 0:
+            print("No indices found for %s" % dt.strftime(date, "%Y%m%d"))
+            continue
+
+        sensorCode = os.path.basename(inFiles[0])[:3]
+
         if sensor == "Landsat":
-            mergedOutfile = os.path.join(path_indices, index, "LS_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
         else:
-            mergedOutfile = os.path.join(path_indices, index, "S2_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
 
         try:
             rsu.createVRT(inFiles, mergedOutfile, separate=False)
