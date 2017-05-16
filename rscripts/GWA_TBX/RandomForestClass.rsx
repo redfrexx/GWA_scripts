@@ -8,13 +8,11 @@
 
 ##Number_of_Cores_for_Processing = number 2
 ##Number_of_Trees = number 150
-##showplots
 
 
 # Check for packages required, and if they are not installed, instal them.
 tryCatch(find.package("maptools"), error=function(e) install.packages("maptools", lib=file.path(.Library[1])))
 tryCatch(find.package("randomForest"), error=function(e) install.packages("randomForest", lib=file.path(.Library[1])))
-tryCatch(find.package("caret"), error=function(e) install.packages("caret", lib=file.path(.Library[1])))
 tryCatch(find.package("snow"), error=function(e) install.packages("snow", lib=file.path(.Library[1])))
 tryCatch(find.package("snowfall"), error=function(e) install.packages("snowfall", lib=file.path(.Library[1])))
 tryCatch(find.package("tcltk"), error=function(e) install.packages("tcltk", lib=file.path(.Library[1])))
@@ -23,7 +21,6 @@ tryCatch(find.package("tcltk"), error=function(e) install.packages("tcltk", lib=
 # load all libraries used
 library(maptools)
 library(randomForest)
-library(caret)
 library(snow)
 library(snowfall)
 library(tcltk)
@@ -41,15 +38,15 @@ pb <- tkProgressBar("Random Forest Progress", "Extracting Training Data", 0, 100
 # First, if the training data are vector polygons they must be coverted to points
 # to speed things up
 if (class(Training_Data)[1]=='SpatialPolygonsDataFrame'){
-# rasterize
-poly_rst<-rasterize(Training_Data, img[[1]], field=Class_ID_Field)
-# convert pixels to points
-Training_Data_P<-rasterToPoints(poly_rst, spatial=TRUE)
-# give the point ID the 'Class_ID_Field' name
-names(Training_Data_P@data)<-Class_ID_Field
-# note for some strange reason, the crs of the spatial points did not match the imagery!
-# here the crs of the sample points is changed back to match the input imagery
-crs(Training_Data_P)<-crs(img[[1]])
+  # rasterize
+  poly_rst<-rasterize(Training_Data, img[[1]], field=Class_ID_Field)
+  # convert pixels to points
+  Training_Data_P<-rasterToPoints(poly_rst, spatial=TRUE)
+  # give the point ID the 'Class_ID_Field' name
+  names(Training_Data_P@data)<-Class_ID_Field
+  # note for some strange reason, the crs of the spatial points did not match the imagery!
+  # here the crs of the sample points is changed back to match the input imagery
+  crs(Training_Data_P)<-crs(img[[1]])
 }
 
 
@@ -59,9 +56,9 @@ sfInit(parallel=TRUE,cpus=Number_of_Cores_for_Processing)
 sfLibrary(raster)
 sfLibrary(rgdal)
 if (class(Training_Data)[1]=='SpatialPolygonsDataFrame'){
-data <- sfSapply(imgl,extract,y=Training_Data_P)
+  data <- sfSapply(imgl,extract,y=Training_Data_P)
 } else {
-data <- sfSapply(imgl,extract,y=Training_Data)
+  data <- sfSapply(imgl,extract,y=Training_Data)
 }
 sfStop()
 data <- data.frame(data)
@@ -70,9 +67,9 @@ names(data)<-names(img)
 
 # add the classification ID to the model training data
 if (class(Training_Data)[1]=='SpatialPolygonsDataFrame'){
-data$LUC <- as.vector(eval(parse(text=paste('Training_Data_P@data$', Class_ID_Field, sep=''))))
+  data$LUC <- as.vector(eval(parse(text=paste('Training_Data_P@data$', Class_ID_Field, sep=''))))
 } else {
-data$LUC <- as.vector(eval(parse(text=paste('Training_Data@data$', Class_ID_Field, sep=''))))
+  data$LUC <- as.vector(eval(parse(text=paste('Training_Data@data$', Class_ID_Field, sep=''))))
 }
 close(pb)
 
@@ -83,8 +80,6 @@ pb <- tkProgressBar("Random Forest Progress", "Training Random Forest Model", 0,
 RandomForestModel <- randomForest(data[,1:(ncol(data)-1)], as.factor(data$LUC), ntree=Number_of_Trees, importance=T, scale=F)
 close(pb)
 
-#variable importance 
-varImpPlot(RandomForestModel)
 
 # get out-of-bag error
 OOBE<-as.data.frame(RandomForestModel[[5]])
@@ -98,10 +93,10 @@ gc()
 
 # mask the resulting classification
 if (Mask_Raster!=''){
-
+pb <- tkProgressBar("Random Forest Progress", "Applying Mangrove Mask", 0, 100, 50)
 msk<-raster(Mask_Raster)
 map_rf <- mask(map_rf, msk, progress='window')
-
+close(pb)
 }
 
 Output_Raster<-map_rf
