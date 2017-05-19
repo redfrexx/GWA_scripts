@@ -33,13 +33,13 @@ debug = False
 
 if debug:
     # TEST PARAMETERS
-    path_output = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2"
-    path_imagery = "I:/2687_GW_A/02_Interim_Products/Toolbox/01_RawData/Imagery/site98/sentinel"
+    path_output = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_LS"
+    path_imagery = "I:/2687_GW_A/02_Interim_Products/Toolbox/01_RawData/Imagery/site98/landsat"
     path_AOI = r"I:\2687_GW_A\02_Interim_Products\Toolbox\01_RawData\AncillaryData\AOI\site98.shp"
-    sensor = 0
+    sensor = 1
     maxCloudCover = 80.
     tileID = ""
-    WCRonly = True
+    WCRonly = False
     extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
     projWkt = 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]'
     startDate = ""
@@ -123,7 +123,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         NDVI = rsu.padArray(NDVI, scene.geotrans, scene.proj, extentAOI)
     # Save to NDVI to file
     NDVI = np.where(mask == 1, nodata, NDVI)
-    rsu.array2raster(NDVI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDVI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
     del NDVI
 
     # NDWI (McFeeters, 1996) and Normalized Difference Water Index
@@ -136,7 +136,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (NDWI.shape[1] < extentAOI.ncol) or (NDWI.shape[0] < extentAOI.nrow):
         NDWI = rsu.padArray(NDWI, scene.geotrans, scene.proj, extentAOI)
     NDWI = np.where(mask == 1, nodata, NDWI)
-    rsu.array2raster(NDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDWI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
     del NDWI
 
     # mNDWI (Xu ,2006)
@@ -149,7 +149,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (MNDWI.shape[1] < extentAOI.ncol) or (MNDWI.shape[0] < extentAOI.nrow):
         MNDWI = rsu.padArray(MNDWI, scene.geotrans, scene.proj, extentAOI)
     MNDWI = np.where(mask == 1, nodata, MNDWI)
-    rsu.array2raster(MNDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(MNDWI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
     del MNDWI
 
     if not WCRonly:
@@ -163,7 +163,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (NDMI.shape[1] < extentAOI.ncol) or (NDMI.shape[0] < extentAOI.nrow):
             NDMI = rsu.padArray(NDMI, scene.geotrans, scene.proj, extentAOI)
         NDMI = np.where(mask == 1, nodata, NDMI)
-        rsu.array2raster(NDMI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(NDMI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
         del NDMI
 
         # Norm Diff GREEN - SWIR2
@@ -187,7 +187,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (ND0406.shape[1] < extentAOI.ncol) or (ND0406.shape[0] < extentAOI.nrow):
             ND0406 = rsu.padArray(ND0406, scene.geotrans, scene.proj, extentAOI)
         ND0406 = np.where(mask == 1, nodata, ND0406)
-        rsu.array2raster(ND0406, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(ND0406,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
         del ND0406
 
         # Normalized Multi-band Drought Index (NMDI)
@@ -407,9 +407,9 @@ for sce in scenes:
     # Check whether scene has enough valid pixels within AOI
     #sce.calcCloudCoverage()
     if sce.cloudy > maxCloudCover:
-        print "Cloud coverage too high. Scene is skipped." % newScene.ID
+        print "Cloud coverage too high. Scene is skipped."
         if not debug:
-            progress.setText("Cloud coverage too high. Scene is skipped." % newScene.ID)
+            progress.setText("Cloud coverage too high. Scene is skipped.")
             continue
 
     scenesWithinExtent.append(sce)

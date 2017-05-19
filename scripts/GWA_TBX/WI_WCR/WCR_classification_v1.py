@@ -210,6 +210,8 @@ del waterFreqs
 validPixels = np.array(validPixels)
 validObs = np.nansum(validPixels, axis=0)
 
+waterFreq_all = np.where(validObs == 0, np.nan, waterFreq_all)
+
 if np.nansum(validObs) == 0:
     if not debug:
         raise GeoAlgorithmExecutionException("No water masks found")
@@ -237,7 +239,7 @@ classification = np.where((waterFreq_all < 80) & (waterFreq_all >= 25), 2, class
 
 file_name = "WCR_total_NUMOB"
 dest = os.path.join(pathOUT_class, file_name + '.tif')
-rsu.array2raster(validPixels, geotrans, proj, dest, gdal.GDT_Byte, 255)
+rsu.array2raster(validObs, geotrans, proj, dest, gdal.GDT_Byte, 255)
 
 file_name = "WCR_water_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
@@ -273,7 +275,5 @@ rsu.array2raster(classification, geotrans, proj, dest, gdal.GDT_Byte, 255)
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "classification_water.qml"), outfile_name)
-
-del waterFreq
 
 

@@ -166,6 +166,7 @@ geotrans, proj = rsu.raster2array(waterMaskFiles[0], jointExtent)[1:3]
 
 waterFreqs = []
 validPixels = []
+validPixels_wet = []
 wetFreqs = []
 
 
@@ -190,10 +191,10 @@ for season in seasons:
         print("No observations for %s " % season[0])
         continue
 
-    waterSum, validObs = calculateFrequency(waterMasks_season, jointExtent)
-    waterFreq = (waterSum / validObs) * 100.
+    waterSum, validObs_water = calculateFrequency(waterMasks_season, jointExtent)
+    waterFreq = (waterSum / validObs_water) * 100.
     waterFreqs.append(waterFreq)
-    validPixels.append(validObs)
+    validPixels.append(validObs_water)
 
     # wetness frequency
     wetMasks_season = []
@@ -207,9 +208,10 @@ for season in seasons:
     if len(wetMasks_season) == 0:
         continue
 
-    wetSum = calculateFrequency(wetMasks_season, jointExtent)[0]
-    wetFreq = (wetSum / validObs) * 100.
+    wetSum, validObs_wet = calculateFrequency(wetMasks_season, jointExtent)
+    wetFreq = (wetSum / validObs_water) * 100.
     wetFreqs.append(wetFreq)
+    validPixels_wet.append(validObs_wet)
 
     # Export to file
     if exportSeasonalFrequencies:
@@ -234,13 +236,18 @@ waterFreq_all = np.nansum(waterFreqs, axis=0) / np.nansum(validPixels != 0, axis
 wetFreqs = np.array(wetFreqs)
 wetFreq_all = np.nansum(wetFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
-del wetFreqs, waterFreqs
-
-
 validPixels = np.array(validPixels)
 validObs = np.nansum(validPixels, axis=0)
 
-if np.nansum(validObs) == 0:
+validPixels_wet = np.array(validPixels_wet)
+validObs_wet = np.nansum(validPixels_wet, axis=0)
+
+wetFreq_all = np.where((validObs_water == 0) | (validObs_wet==0), np.nan, wetFreq_all)
+waterFreq_all = np.where(validObs_water == 0, np.nan, waterFreq_all)
+
+del wetFreqs, waterFreqs, validPixels
+
+if np.nansum(validObs_water) == 0:
     if not debug:
         raise GeoAlgorithmExecutionException("No water masks found")
     else:
@@ -288,7 +295,7 @@ classification = np.where(classification == 10, 0, classification)
 
 file_name = "WI_total_NUMOB"
 dest = os.path.join(pathOUT_class, file_name + '.tif')
-rsu.array2raster(validPixels, geotrans, proj, dest, gdal.GDT_Byte, 255)
+rsu.array2raster(validObs_water, geotrans, proj, dest, gdal.GDT_Byte, 255)
 
 file_name = "WI_water_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
@@ -313,7 +320,7 @@ copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 file_name = "WI_wetness_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
-rsu.array2raster(wetFreq, geotrans, proj, dest, gdal.GDT_Float32, -9999)
+rsu.array2raster(wetFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
 
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
