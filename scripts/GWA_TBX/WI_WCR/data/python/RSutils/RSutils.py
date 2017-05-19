@@ -35,6 +35,7 @@ import subprocess
 import zipfile
 import xml.etree.ElementTree as eTree
 import warnings
+from shapely.geometry import Polygon
 
 # CLASSES ===============================================================
 
@@ -60,7 +61,7 @@ class Scene(object):
 
         self.extent = extentAOI
 
-        self.cloudCoverage = None
+        self.cloudy = None
 
     def getGeotrans(self):
 
@@ -153,7 +154,7 @@ class Scene(object):
 
     def calcCloudCoverage(self, AOIextent=None):
 
-        if self.cloudCoverage is None:
+        if self.cloudy is None:
 
             if not os.path.exists(self.fmask):
                 return 1
@@ -168,7 +169,7 @@ class Scene(object):
 
             # Compute cloud coverate
             # self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / (float(self.extent.ncol) * float(self.extent.nrow))) * 100.
-            self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / nonNANpixels) * 100.
+            self.cloudy = 100. - (float(bn.nansum(mask == 0)) / nonNANpixels) * 100.
 
 class SentinelScene(Scene):
     """Class to handle Sentinel-2 scenes 
@@ -182,6 +183,7 @@ class SentinelScene(Scene):
         Scene.__init__(self, sceneDir, tempDir, extentAOI)
 
         # Scene description
+        self.sensorCode = "SE2"
         self.ID = ID
         if ID is not None:
             self.tileID = self.ID[-6:]
@@ -218,6 +220,9 @@ class SentinelScene(Scene):
 
             # Get date
             datestring = [child.text for child in rootElement.iter("SENSING_TIME")][0]
+            self.cloudy = [float(child.text) for child in rootElement.iter("CLOUDY_PIXEL_PERCENTAGE")][0]
+            self.degraded = [float(child.text) for child in rootElement.iter("DEGRADED_MSI_DATA_PERCENTAGE")][0]
+
             self.date = dt.strptime(datestring[:10], "%Y-%m-%d")
 
             metaF.close()
@@ -238,6 +243,8 @@ class SentinelScene(Scene):
             rootElement = metainfo.getroot()
 
             datestring = [child.text for child in rootElement.iter("SENSING_TIME")][0]
+            self.cloudy = [float(child.text) for child in rootElement.iter("CLOUDY_PIXEL_PERCENTAGE")][0]
+            self.degraded = [float(child.text) for child in rootElement.iter("DEGRADED_MSI_DATA_PERCENTAGE")][0]
             self.date = dt.strptime(datestring[:10], "%Y-%m-%d")
 
             # Get IDs
@@ -365,6 +372,7 @@ class LandsatScene(Scene):
         self.tileID = self.ID[3:9]
         self.date = dt.strptime(self.ID[9:16], "%Y%j")
         self.sensor = self.ID[2]
+        self.sensorCode = "LS" + self.sensor
 
         self.getFiles()
         self.getGeotrans()
@@ -512,6 +520,37 @@ class extent(object):
         # Check if extent is valid
         if self.ncol <= 0 or self.nrow <= 0:
             print("Extent is invalid!")
+
+    def get_as_polygon(self):
+        return(Polygon([(self.ulX, self.ulY), (self.ulX, self.lrY), (self.lrX, self.lrY), (self.lrX, self.ulY), (self.ulX, self.ulY)]))
+
+    def save_as_shp(self, shp_path, shp_name):
+
+        poly = self.get_as_polygon()
+
+        # Now convert it to a shapefile with OGR
+        driver = ogr.GetDriverByName('Esri Shapefile')
+        ds = driver.CreateDataSource(shp_path)
+        layer = ds.CreateLayer(shp_name, srs=self.proj, geom_type=ogr.wkbPolygon)
+        # Add one attribute
+        layer.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+        defn = layer.GetLayerDefn()
+
+        # Create a new feature (attribute and geometry)
+        feat = ogr.Feature(defn)
+        feat.SetField('id', 1)
+
+        # Make a geometry, from Shapely object
+        geom = ogr.CreateGeometryFromWkb(poly.wkb)
+        feat.SetGeometry(geom)
+
+        layer.CreateFeature(feat)
+        feat = geom = None
+
+        # Save and close everything
+        ds = layer = feat = geom = None
+
+
 
 # FUNCTIONS =============================================================
 
