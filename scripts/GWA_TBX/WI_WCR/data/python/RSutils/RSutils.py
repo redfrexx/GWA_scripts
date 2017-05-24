@@ -36,6 +36,9 @@ import zipfile
 import xml.etree.ElementTree as eTree
 import warnings
 from shapely.geometry import Polygon
+import win32api
+
+
 
 # CLASSES ===============================================================
 
@@ -180,7 +183,7 @@ class SentinelScene(Scene):
 
     def __init__(self, sceneDir, ID=None, tempDir=None, extentAOI=None):
 
-        Scene.__init__(self, sceneDir, tempDir, extentAOI)
+        Scene.__init__(self, sceneDir=sceneDir, ID=ID, tempDir=tempDir, extentAOI=extentAOI)
 
         # Scene description
         self.sensorCode = "SE2"
@@ -229,16 +232,24 @@ class SentinelScene(Scene):
             zpfile.close()
 
         else:
-            metadatafile = ""
-            for root, dirs, files in os.walk(self.dir):
-                for f in files:
-                    if f == "MTD_TL.xml" or (self.tileID is not None and f.endswith("*"+self.tileID+".xml")):
-                        metadatafile = os.path.join(root, f)
+
+            if self.tileID is not None:
+                searchPattern = "*" + self.tileID + "*.xml"
+            else:
+                searchPattern = "*.xml"
+
+            for (root, dirnames, filenames) in os.walk(self.dir):
+                for d in fnmatch.filter(dirnames, "GRANULE"):
+                    self.granuleDir = os.path.join(root, d)
+            for (root, dirnames, filenames) in os.walk(self.granuleDir):
+                for d in fnmatch.filter(filenames, searchPattern):
+                    metadatafile = os.path.abspath(os.path.join(root, d))
 
             if metadatafile == "":
                 raise RuntimeError("No metadata file found!")
 
-            metaF = open(metadatafile)
+            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), os.path.basename(metadatafile))
+            metaF = open(self.metadatafile)
             metainfo = eTree.parse(metaF)
             rootElement = metainfo.getroot()
 
@@ -296,35 +307,17 @@ class SentinelScene(Scene):
             zpfile.close()
         else:
 
+            bandsDir = os.path.join(os.path.dirname(self.metadatafile), "IMG_DATA")
             for b in bandEndings:
-                band = glob.glob(self.dir + "*/GRANULE/*/IMG_DATA/*%s.[Jj][Pp]2"%b)
-                if len(band) == 0:
-                    band = glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*%s.[Jj][Pp]2" % b)
-                    if len(band) == 0:
-                        band = None
-                        if b in optionalBands:
-                            warnings.warn("Band %s is missing" % b)
-                        else:
-                            raise IOError("Band %s is missing" % b)
-                else:
-                    band = band[0]
-                self.files.append(band)
+                self.files += [os.path.join(bandsDir, f) for f in fnmatch.filter(os.listdir(bandsDir), "*"+b+".jp2")]
 
-            #self.files = glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B0[2345678].[Jj][Pp]2")
-            #self.files += glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B8A.[Jj][Pp]2")
-            #self.files += glob.glob(self.dir + "/*/GRANULE/*/IMG_DATA/*B1[12].[Jj][Pp]2")
-            #self.files.sort()
+        # cloud mask file
+        fmask = [os.path.join(self.tempDir, b) for b in fnmatch.filter(os.listdir(self.tempDir), self.ID + "*_fmask.[Tt][Ii][Ff]")]
+        if len(fmask) != 0:
+            self.fmask = fmask[0]
+        else:
+            self.fmask = ""
 
-            # Mask files
-            fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.[Tt][Ii][Ff]")]
-            if len(fmask) != 0:
-                self.fmask = fmask[0]
-            else:
-                fmask = [os.path.join(self.dir, b) for b in fnmatch.filter(os.listdir(self.dir), "*_fmask.img")]
-                if len(fmask) == 0:
-                    self.fmask = ""
-                else:
-                    self.fmask = fmask[0]
 
     def getBand(self, bandNo=1, masked=True, extent=None):
         """Get specified band of scene as numpy array.
