@@ -20,8 +20,9 @@
 
 #==================================
 # import modules
-import gdal
-import numpy as np
+import os
+import sys
+from processing.tools import dataobjects
 
 here = os.path.dirname(scriptDescriptionFile)
 if here not in sys.path:
@@ -31,25 +32,25 @@ import segStack
 
 outBands = []
 if B1 == True:
-    bandList.append(1)
+    outBands.append(1)
 if B2 == True:
-    bandList.append(2)
+    outBands.append(2)
 if B3 == True:
-    bandList.append(3)
+    outBands.append(3)
 if B4 == True:
-    bandList.append(4)
+    outBands.append(4)
 if B5 == True:
     bandList.append(5)
 if B6 == True:
-    bandList.append(6)
+    outBands.append(6)
 if B7 == True:
-    bandList.append(7)
+    outBands.append(7)
 if B8 == True:
-    bandList.append(8)
+    outBands.append(8)
 if B9 == True:
-    bandList.append(9)
+    outBands.append(9)
 if B10 == True:
-    bandList.append(10)
+    outBands.append(10)
 if len(outBands) == 0:
     raise GeoAlgorithmExecutionException("ERROR: No bands selected")
 
