@@ -18,7 +18,7 @@
 ##ParameterFile|path_imagery|Directory containing imagery|True|False
 ##ParameterSelection|sensor|Sensor|Sentinel-2;Landsat 5/7/8|Sentinel-2
 ##ParameterSelection|AOItype|Type of AOI|Shapefile;User defined extent;Joint extent of all scenes
-##ParameterVector|path_AOI|Shapefile containing AOI (Area of Interest)
+##ParameterFile|path_AOI|Shapefile containing AOI (Area of Interest)
 ##ParameterExtent|extentCoords|User defined Extent||True
 ##OutputDirectory|path_output|Output directory
 ##*ParameterNumber|maxCloudCover|Maximum Cloud Coverage|0|100|100
@@ -34,17 +34,17 @@ debug = False
 if debug:
     # TEST PARAMETERS
     path_output = r"I:\2687_GW_A\Toolbox\02_InterimProducts\site_02"
-    path_imagery = r"T:\Processing\2687_GW_A\01_RawData\Imagery\workshop\otherwetland"
-    path_AOI = r"I:\2687_GW_A\Toolbox\01_RawData\AncillaryData\AOI\site98.shp"
+    path_imagery = r"T:\Processing\2687_GW_A\01_RawData\Imagery\workshop\otherwetland\zipped"
+    path_AOI = r"T:\Processing\2687_GW_A\01_RawData\Ancillary_Data\workshop\Shapefiles_Lake_Wet\Wetland.shp"
     sensor = 0
-    maxCloudCover = 80.
+    maxCloudCover = 100.
     tileID = ""
     WCRonly = False
     extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
     projWkt = 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]'
     startDate = ""
     endDate = ""
-    AOItype=2
+    AOItype=0
     here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
 
 # IMPORTS ----------------------------------------------------------------------------------------------
@@ -280,12 +280,12 @@ if sensor == "Sentinel":
                 for (root, dirnames, filenames) in os.walk(sceD):
                     for d in fnmatch.filter(dirnames, "GRANULE"):
                         granuleDir = os.path.join(root, d)
-                for (root, dirnames, filenames) in os.walk(granuleDir):
-                    for d in fnmatch.filter(filenames, "*.xml"):
-                        metadatafiles.append(os.path.join(root, d))
+                for d in os.listdir(granuleDir):
+                    for f in fnmatch.filter(os.listdir(os.path.join(granuleDir,d)), "*.xml"):
+                        metadatafiles.append(os.path.join(granuleDir, d,f))
 
                 if len(metadatafiles) > 1:
-                    sceneDirs_ID += [[sceD, x[-10:-4]] for x in metadatafiles]
+                    sceneDirs_ID += [[sceD, os.path.basename(x)[-10:-4]] for x in metadatafiles]
                 else:
                     sceneDirs_ID.append([sceD, None])
 

@@ -232,7 +232,7 @@ class SentinelScene(Scene):
             zpfile.close()
 
         else:
-
+            metadataMatches = []
             if self.tileID is not None:
                 searchPattern = "*" + self.tileID + "*.xml"
             else:
@@ -241,14 +241,16 @@ class SentinelScene(Scene):
             for (root, dirnames, filenames) in os.walk(self.dir):
                 for d in fnmatch.filter(dirnames, "GRANULE"):
                     self.granuleDir = os.path.join(root, d)
-            for (root, dirnames, filenames) in os.walk(self.granuleDir):
-                for d in fnmatch.filter(filenames, searchPattern):
-                    metadatafile = os.path.abspath(os.path.join(root, d))
+            for d in os.listdir(self.granuleDir):
+                for f in fnmatch.filter(os.listdir(os.path.join(self.granuleDir, d)), searchPattern):
+                    metadataMatches.append(os.path.join(self.granuleDir, d, f))
 
-            if metadatafile == "":
+            if len(metadataMatches) != 1:
                 raise RuntimeError("No metadata file found!")
+            else:
+                metadatafile = metadataMatches[0]
 
-            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), os.path.basename(metadatafile))
+            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), )
             metaF = open(self.metadatafile)
             metainfo = eTree.parse(metaF)
             rootElement = metainfo.getroot()

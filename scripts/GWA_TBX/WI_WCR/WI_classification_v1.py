@@ -230,14 +230,14 @@ for season in seasons:
         copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 
+validPixels = np.array(validPixels)
+validObs = np.nansum(validPixels, axis=0)
+
 waterFreqs = np.array(waterFreqs)
 waterFreq_all = np.nansum(waterFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
 wetFreqs = np.array(wetFreqs)
 wetFreq_all = np.nansum(wetFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
-
-validPixels = np.array(validPixels)
-validObs = np.nansum(validPixels, axis=0)
 
 validPixels_wet = np.array(validPixels_wet)
 validObs_wet = np.nansum(validPixels_wet, axis=0)
