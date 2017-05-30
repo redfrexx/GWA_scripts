@@ -18,7 +18,7 @@
 ##ParameterFile|path_imagery|Directory containing imagery|True|False
 ##ParameterSelection|sensor|Sensor|Sentinel-2;Landsat 5/7/8|Sentinel-2
 ##ParameterSelection|AOItype|Type of AOI|Shapefile;User defined extent;Joint extent of all scenes
-##ParameterVector|path_AOI|Shapefile containing AOI (Area of Interest)
+##ParameterFile|path_AOI|Shapefile containing AOI (Area of Interest)
 ##ParameterExtent|extentCoords|User defined Extent||True
 ##OutputDirectory|path_output|Output directory
 ##*ParameterNumber|maxCloudCover|Maximum Cloud Coverage|0|100|100
@@ -33,11 +33,11 @@ debug = False
 
 if debug:
     # TEST PARAMETERS
-    path_output = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_LS"
-    path_imagery = "I:/2687_GW_A/02_Interim_Products/Toolbox/01_RawData/Imagery/site98/landsat"
-    path_AOI = r"I:\2687_GW_A\02_Interim_Products\Toolbox\01_RawData\AncillaryData\AOI\site98.shp"
-    sensor = 1
-    maxCloudCover = 80.
+    path_output = r"I:\2687_GW_A\Toolbox\02_InterimProducts\site_02"
+    path_imagery = r"T:\Processing\2687_GW_A\01_RawData\Imagery\workshop\otherwetland\zipped"
+    path_AOI = r"T:\Processing\2687_GW_A\01_RawData\Ancillary_Data\workshop\Shapefiles_Lake_Wet\Wetland.shp"
+    sensor = 0
+    maxCloudCover = 100.
     tileID = ""
     WCRonly = False
     extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
@@ -45,7 +45,7 @@ if debug:
     startDate = ""
     endDate = ""
     AOItype=0
-    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX_v1"
+    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
 
 # IMPORTS ----------------------------------------------------------------------------------------------
 import os, sys
@@ -64,7 +64,7 @@ if not debug:
 pyDir = os.path.join(here, 'data', 'python')
 if pyDir not in sys.path:
     sys.path.append(pyDir)
-	
+
 import RSutils.RSutils as rsu
 
 if not debug:
@@ -250,14 +250,45 @@ if not os.path.exists(path_vrt):
 path_indices= os.path.join(path_output, "indices")
 if not os.path.exists(path_indices):
     os.mkdir(path_indices)
-    
+
+path_cloudmasks= os.path.join(path_output, "cloudmasks")
+if not os.path.exists(path_cloudmasks):
+    os.mkdir(path_cloudmasks)
+
 # Search for scene directories  --------------------------------------------------------------
 if sensor == "Sentinel":
     sceneDirs = rsu.search_scene_directories(path_imagery, "S2[AB]*")
-    sceneDirs2 = []
+    sceneDirs_ID = []
+
     for i,sceD in enumerate(sceneDirs):
+        metadatafiles = []
+
         try:
-            zpfile = zipfile.ZipFile(sceD)
+
+            if sceD.endswith(".zip"):
+                zpfile = zipfile.ZipFile(sceD)
+                metadatafiles = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/MTD_TL.xml")
+                if len(metadatafiles) == 0:
+                    metadatafiles = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/S2*.xml")
+                    if len(metadatafiles) > 0:
+                        sceneDirs_ID += [[sceD, x[-10:-4]] for x in metadatafiles]
+                else:
+                    sceneDirs_ID.append([sceD, None])
+                del zpfile
+            else:
+                granuleDir = ""
+                for (root, dirnames, filenames) in os.walk(sceD):
+                    for d in fnmatch.filter(dirnames, "GRANULE"):
+                        granuleDir = os.path.join(root, d)
+                for d in os.listdir(granuleDir):
+                    for f in fnmatch.filter(os.listdir(os.path.join(granuleDir,d)), "*.xml"):
+                        metadatafiles.append(os.path.join(granuleDir, d,f))
+
+                if len(metadatafiles) > 1:
+                    sceneDirs_ID += [[sceD, os.path.basename(x)[-10:-4]] for x in metadatafiles]
+                else:
+                    sceneDirs_ID.append([sceD, None])
+
         except Exception,e:
             if not debug:
                 raise GeoAlgorithmExecutionException("Invalid input data: Invalid file in 'Directory containing imagery': %s " % sceD)
@@ -265,21 +296,12 @@ if sensor == "Sentinel":
                 print("Invalid input data: Invalid file in 'Directory containing imagery': %s" % sceD)
                 sys.exit(1)
 
-        metadatafile = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/MTD_TL.xml")
-        if len(metadatafile) == 0:
-            xmlfiles = fnmatch.filter(zpfile.namelist(), "*/GRANULE/*/S2*.xml")
-            if len(xmlfiles) > 0:
-                sceneDirs2 += [[sceD, x[-10:-4]] for x in xmlfiles]
-        else:
-            sceneDirs2.append([sceD, None])
-        del zpfile
-    sceneDirs = sceneDirs2
+    sceneDirs = sceneDirs_ID
 else:
     sceneDirs = rsu.search_scene_directories(path_imagery, "L[COTE]*")
     sceneDirs = [[sD,None] for sD in sceneDirs]
 
 # Search scenes --------------------------------------------------------------------------------
-
 if not debug:
     progress.setText("Searching %s scenes ..." % sensor)
 
@@ -291,9 +313,9 @@ for sD in sceneDirs:
 
     try:
         if sensor == "Landsat":
-            newScene = rsu.LandsatScene(sD[0], ID=sD[1], tempDir=path_output)
+            newScene = rsu.LandsatScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
         elif sensor == "Sentinel":
-            newScene = rsu.SentinelScene(sD[0], ID=sD[1], tempDir=path_output)
+            newScene = rsu.SentinelScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
 
         if tileID is None or (tileID in newScene.tileID):
             scenes.append(newScene)
@@ -303,9 +325,9 @@ for sD in sceneDirs:
 
     except Exception, e:
         if not debug:
-            progress.setText("Error: %s. Scene is skipped." % (os.path.basename(sD[0]), e))
+            progress.setText("Error: %s. Scene is skipped." % (e))
         else:
-            print "Error: %s. Scene is skipped." % (os.path.basename(sD[0]), e)
+            print "Error: %s. Scene is skipped." % e
 
 if len(scenes) == 0:
     if not debug:
