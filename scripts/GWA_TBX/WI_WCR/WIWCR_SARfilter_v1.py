@@ -35,6 +35,8 @@ import os
 import fnmatch
 import time
 
+starttime = time.time()
+
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
     import cv2
@@ -107,3 +109,16 @@ for i,inFile in enumerate(SARfiles):
     if not debug:
         state = ((i + 1.) / len(SARfiles[:2]))*100
         progress.setPercentage(state)
+
+
+#benchmasking
+endtime = time.time()
+delta = str(int((endtime - starttime) / 60.)) + " min, " + str(round((endtime - starttime) % 60.,2)) + " sec"
+log = open(os.path.join(path_output, "Benchmark_"+os.path.basename(__file__)[:-3]+".txt"), "w+")
+
+log.write("Execution time: %s\n\n" % delta)
+log.write("Input parameters:\n")
+log.write("Input folder: %s\n" % inDir)
+log.write("Water: %s\n" % water)
+log.write("Wetness: %s\n" % wetness)
+log.close()

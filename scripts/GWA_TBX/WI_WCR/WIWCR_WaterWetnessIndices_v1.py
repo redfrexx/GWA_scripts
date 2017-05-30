@@ -56,6 +56,9 @@ import logging
 import fnmatch
 import datetime as dt
 import zipfile
+import time
+
+starttime = time.time()
 
 # Load additional library
 if not debug:
@@ -514,6 +517,22 @@ for date in uniqueDates:
 if not debug:
     progress.setPercentage(100)
 
+endtime = time.time()
+delta = str(int((endtime - starttime) / 60.)) + " min, " + str(round((endtime - starttime) % 60.,2)) + " sec"
+log = open(os.path.join(path_output, "Benchmark_"+os.path.basename(__file__)[:-3]+ "_" + dt.datetime.today().strftime("%Y%m%d-h%Hm%M") + ".txt"), "w+")
 
+log.write("Execution time: %s\n\n" % delta)
+log.write("Input parameters:\n")
+log.write("Input folder: %s\n" % path_imagery)
+log.write("Shapefile: %s\n" % path_AOI)
+log.write("sensor: %s\n" % sensor)
+log.write("maxCloudCover: %s\n" % maxCloudCover)
+log.write("tileID: %s \n" % tileID)
+log.write("WCRonly: %s\n" % WCRonly)
+log.write("extentCoords: %s\n" % extentCoords)
+log.write("startDate: %s\n" % startDate)
+log.write("endDate: %s\n" % endDate)
+log.write("AOItype: %s\n" % AOItype)
+log.close()
 
 
