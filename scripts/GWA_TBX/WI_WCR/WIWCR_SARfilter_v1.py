@@ -114,7 +114,7 @@ for i,inFile in enumerate(SARfiles):
 #benchmasking
 endtime = time.time()
 delta = str(int((endtime - starttime) / 60.)) + " min, " + str(round((endtime - starttime) % 60.,2)) + " sec"
-log = open(os.path.join(path_output, "Benchmark_"+os.path.basename(__file__)[:-3]+".txt"), "w+")
+log = open(os.path.join(path_output, "Benchmark_"+os.path.basename(scriptDescriptionFile)[:-3]+".txt"), "w+")
 
 log.write("Execution time: %s\n\n" % delta)
 log.write("Input parameters:\n")
