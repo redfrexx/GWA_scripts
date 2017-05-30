@@ -16,7 +16,7 @@
 ##Wetland Inventory Classification = name
 ##Wetland Inventory=group
 ##ParameterFile|pathIN|Directory containing water and wetness masks|True|False
-##OutputDirectory|pathOUT|Output directory
+##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water and wetness frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
 ##*ParameterString|endDate|End date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
@@ -29,16 +29,16 @@ debug = False
 
 # test paths
 if debug:
-    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterWetnessMasks_wat450_wet500_win1800_mmu3"
-    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterWetnessMasks_wat450_wet500_win1800_mmu3"
+    path_input = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI\SE_wat45_wet50_win1800_mmu3"
+    path_output = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI"
     exportSeasonalFrequencies = True
-    startDate = "20170101"
-    endDate = "20170930"
+    startDate = ""
+    endDate = ""
     spring = True
     summer = True
     fall = True
     winter = True
-    here = "."
+    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
 
 import os, sys
 import numpy as np
@@ -46,6 +46,7 @@ import fnmatch
 import gdal
 from shutil import copyfile
 import datetime as dt
+import time
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
@@ -93,18 +94,18 @@ def calculateFrequency(inFiles, extent):
 
 # Check input parameters ------------------------------------------------------------------------------
 
-if not os.path.exists(pathIN):
+if not os.path.exists(path_input):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Directory containing water and wetness masks' does not exist.")
     print("Invalid input parameters: 'Directory containing water and wetness masks' does not exist.")
 
-if not os.path.exists(pathOUT):
+if not os.path.exists(path_output):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Output directory' does not exist.")
     print("Invalid input parameters: 'Output directory' does not exist.")
 
 
-pathOUT_class = os.path.join(pathOUT,"classification_WI")
+pathOUT_class = os.path.join(path_output, "classification_WI")
 if not os.path.exists(pathOUT_class):
     os.mkdir(pathOUT_class)
 
@@ -141,8 +142,8 @@ if endDate is not None and startDate is not None and endDate < startDate:
 # WATER occurance and frequency =========================================================
 
 # Search water masks
-waterMaskFiles = [os.path.join(pathIN, f) for f in fnmatch.filter(os.listdir(pathIN), "*_watermask.tif")]
-wetMaskFiles = [os.path.join(pathIN, f) for f in fnmatch.filter(os.listdir(pathIN), "*wetmask.tif")]
+waterMaskFiles = [os.path.join(path_input, f) for f in fnmatch.filter(os.listdir(path_input), "*_watermask.tif")]
+wetMaskFiles = [os.path.join(path_input, f) for f in fnmatch.filter(os.listdir(path_input), "*wetmask.tif")]
 
 # Check whether masks exist
 if len(waterMaskFiles) == 0:

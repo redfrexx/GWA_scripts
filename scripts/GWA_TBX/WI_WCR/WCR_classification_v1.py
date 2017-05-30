@@ -17,7 +17,7 @@
 ##Water Cycle Regime=group
 
 ##ParameterFile|pathIN|Directory containing water masks|True|False
-##OutputDirectory|pathOUT|Output directory
+##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
 ##*ParameterString|endDate|End date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
@@ -30,12 +30,12 @@ debug = False
 
 # test paths
 if debug:
-    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
-    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
+    pathIN = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI\SE_wat45_wet50_win1800_mmu3"
+    path_output = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WCR"
     exportSeasonalFrequencies = True
-    startDate = "20170101"
-    endDate = "20171231"
-    spring = False
+    startDate = ""
+    endDate = ""
+    spring = True
     summer = True
     fall = True
     winter = True
@@ -104,13 +104,13 @@ if not os.path.exists(pathIN):
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Directory containing water masks' does not exist.")
     print("Invalid input parameters: 'Directory containing water masks' does not exist.")
 
-if not os.path.exists(pathOUT):
+if not os.path.exists(path_output):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Output directory' does not exist.")
     print("Invalid input parameters: 'Output directory' does not exist.")
 
 
-pathOUT_class = os.path.join(pathOUT,"classification_WCR")
+pathOUT_class = os.path.join(path_output, "classification_WCR")
 if not os.path.exists(pathOUT_class):
     os.mkdir(pathOUT_class)
 
@@ -120,7 +120,8 @@ if exportSeasonalFrequencies:
     if not os.path.exists(pathOUT_freqs):
         os.mkdir(pathOUT_freqs)
 
-progress.setText(pathOUT_class)
+if not debug:
+    progress.setText(pathOUT_class)
 
 # Check start and end dates ---------------------------------------------------------------------------------------------------------------------------------
 if startDate == "":
@@ -231,7 +232,6 @@ classification = np.where(waterFreq_all >= 80, 1, classification)
 
 # Temporary Water
 classification = np.where((waterFreq_all < 80) & (waterFreq_all >= 25), 2, classification)
-
 
 # Export maps to file ===============================================================================
 

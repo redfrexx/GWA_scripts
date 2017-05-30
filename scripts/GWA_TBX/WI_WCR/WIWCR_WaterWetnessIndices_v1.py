@@ -54,7 +54,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import logging
 import fnmatch
-from datetime import datetime as dt
+import datetime as dt
 import zipfile
 
 # Load additional library
@@ -81,7 +81,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         os.mkdir(outputDir)
 
     # Make file title
-    outputName = scene.sensorCode + "_" + scene.tileID + "_" + dt.strftime(scene.date, "%Y%m%d")
+    outputName = scene.sensorCode + "_" + scene.tileID + "_" + dt.datetime.strftime(scene.date, "%Y%m%d")
 
     # Read in bands
     bands = []
@@ -309,7 +309,9 @@ scenes = []
 for sD in sceneDirs:
 
     if not debug:
-        progress.setText("%s / %s" % (sD[0], sD[1]))
+        progress.setText("\n%s - %s" % (sD[0], sD[1]))
+    else:
+        print("\n%s - %s" % (sD[0], sD[1]))
 
     try:
         if sensor == "Landsat":
@@ -323,11 +325,16 @@ for sD in sceneDirs:
             if not debug:
                 progress.setText("Scene not included: Tile ID doesn't match %s." % tileID)
 
+    except IOError as e:
+        if not debug:
+            progress.setText("WARNING: Scene is skipped. (%s)" % (e))
+        else:
+            print("WARNING: Scene skipped. (%s)" % (e))
     except Exception, e:
         if not debug:
-            progress.setText("Error: %s. Scene is skipped." % (e))
+            progress.setText("ERROR: Scene is skipped. (%s)" % (e))
         else:
-            print "Error: %s. Scene is skipped." % e
+            print "ERROR: Scene is skipped. (%s)" % e
 
 if len(scenes) == 0:
     if not debug:
@@ -341,7 +348,7 @@ if startDate == "":
     startDate = min([sce.date for sce in scenes])
 else:
     try:
-        startDate = dt.strptime(startDate, "%Y%m%d")
+        startDate = dt.datetime.strptime(startDate, "%Y%m%d")
     except: 
         raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'Start date' is not valid.")
 
@@ -349,7 +356,7 @@ if endDate == "":
     endDate = max([sce.date for sce in scenes])
 else:
     try:
-        endDate = dt.strptime(endDate, "%Y%m%d")
+        endDate = dt.datetime.strptime(endDate, "%Y%m%d")
     except: 
         raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'End date' is not valid.")
 
@@ -396,7 +403,7 @@ elif AOItype == 1:
     path_output_extents = os.path.join(path_output, "userDefinedExtents")
     if not os.path.exists(path_output_extents):
         os.mkdir(path_output_extents)
-    extent_name = "userDefinedExtent_" + dt.today().strftime("%Y%m%d-h%Hm%M")
+    extent_name = "userDefinedExtent_" + dt.datetime.today().strftime("%Y%m%d-h%Hm%M")
     extentAOI.save_as_shp(path_output_extents, extent_name)
 
     if not debug:
@@ -482,18 +489,18 @@ for date in uniqueDates:
     scenesAtdate = [sce for sce in scenes if (sce.date == date)]
 
     for index in indexFolders:
-        inFiles = [os.path.join(path_indices, index, f) for f in fnmatch.filter(os.listdir(os.path.join(path_indices, index)), "*" + dt.strftime(date, "%Y%m%d") + "*.tif")]
+        inFiles = [os.path.join(path_indices, index, f) for f in fnmatch.filter(os.listdir(os.path.join(path_indices, index)), "*" + dt.datetime.strftime(date, "%Y%m%d") + "*.tif")]
 
         if len(inFiles) == 0:
-            print("No indices found for %s" % dt.strftime(date, "%Y%m%d"))
+            print("No indices found for %s" % dt.datetime.strftime(date, "%Y%m%d"))
             continue
 
         sensorCode = os.path.basename(inFiles[0])[:3]
 
         if sensor == "Landsat":
-            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.datetime.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
         else:
-            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.datetime.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
 
         try:
             rsu.createVRT(inFiles, mergedOutfile, separate=False)
