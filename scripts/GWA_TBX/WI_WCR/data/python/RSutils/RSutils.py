@@ -20,7 +20,6 @@ import glob
 from osgeo import gdal, ogr
 from gdalconst import GA_ReadOnly
 import os, sys
-import bottleneck as bn
 import numpy as np
 from osgeo import osr
 from scipy import ndimage
@@ -171,8 +170,7 @@ class Scene(object):
             mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4), 1, 0)
 
             # Compute cloud coverate
-            # self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / (float(self.extent.ncol) * float(self.extent.nrow))) * 100.
-            self.cloudy = 100. - (float(bn.nansum(mask == 0)) / nonNANpixels) * 100.
+            self.cloudy = 100. - (float(np.nansum(mask == 0)) / nonNANpixels) * 100.
 
 class SentinelScene(Scene):
     """Class to handle Sentinel-2 scenes 
@@ -250,8 +248,15 @@ class SentinelScene(Scene):
             else:
                 metadatafile = metadataMatches[0]
 
-            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), )
-            metaF = open(self.metadatafile)
+            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), os.path.basename(metadatafile))
+            try:
+                metaF = open(self.metadatafile)
+            except IOError as e:
+                if len(self.metadatafile) > 256:
+                    raise IOError("File path to metadata file is too long. Move scene to a different location to shorten the file path.")
+                else:
+                    raise IOError("Meta data file could not be read.")
+
             metainfo = eTree.parse(metaF)
             rootElement = metainfo.getroot()
 
@@ -314,7 +319,7 @@ class SentinelScene(Scene):
                 self.files += [os.path.join(bandsDir, f) for f in fnmatch.filter(os.listdir(bandsDir), "*"+b+".jp2")]
 
         # cloud mask file
-        fmask = [os.path.join(self.tempDir, b) for b in fnmatch.filter(os.listdir(self.tempDir), self.ID + "*_fmask.[Tt][Ii][Ff]")]
+        fmask = [os.path.join(self.tempDir, b) for b in fnmatch.filter(os.listdir(self.tempDir), "*" + self.tileID + "*" + self.date.strftime("%Y%m%d") + "*_fmask.[Tt][Ii][Ff]")]
         if len(fmask) != 0:
             self.fmask = fmask[0]
         else:
