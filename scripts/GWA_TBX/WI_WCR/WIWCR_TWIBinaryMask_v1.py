@@ -36,11 +36,14 @@ from scipy import ndimage
 from osgeo import gdal
 
 # Load additional library
+here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
+
 here = os.path.dirname(scriptDescriptionFile)
 pyDir = os.path.join(here, 'data', 'python')
 if pyDir not in sys.path:
     sys.path.append(pyDir)
-	
+
+
 import RSutils.RSutils as rsu
 
 

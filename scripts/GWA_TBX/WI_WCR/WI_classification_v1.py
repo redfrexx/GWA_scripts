@@ -15,7 +15,7 @@
 
 ##Wetland Inventory Classification = name
 ##Wetland Inventory=group
-##ParameterFile|pathIN|Directory containing water and wetness masks|True|False
+##ParameterFile|path_input|Directory containing water and wetness masks|True|False
 ##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water and wetness frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
