@@ -57,13 +57,7 @@ if (debug) {
 }
 Increase_sensitivity=FALSE
 
-#if("raster" %in% rownames(installed.packages()) == FALSE) {install.packages("raster")}
-#if("rgdal" %in% rownames(installed.packages()) == FALSE) {install.packages("rgdal")}
-#if("pastecs" %in% rownames(installed.packages()) == FALSE) {install.packages("pastecs")}
-#if("plyr" %in% rownames(installed.packages()) == FALSE) {install.packages("plyr")}
-#if("doParallel" %in% rownames(installed.packages()) == FALSE) {install.packages("doParallel")}
-#if("foreach" %in% rownames(installed.packages()) == FALSE) {install.packages("foreach")}
-#install.packages("O:/2687_GW_A/04_CODE/R/compiledPackages/GWAutils.zip", repos=NULL, type="win.binary")
+#sink(file.path(Output_Directory, "log.txt"))
 
 library(raster)
 library(rgdal)
@@ -265,13 +259,14 @@ if (length(pathTWImask)==0) {
 }
 
 
+
 # 2.  Compute WATER and WETNESS masks
 # -----------------------------------
 
 main <- function(d) {
   
-  rasterOptions(maxmemory=100000000)
-  removeTmpFiles(0.25)
+  rasterOptions(maxmemory=1000000000)
+  removeTmpFiles(0.1)
   
   twimask <- raster(pathTWImask)
   
@@ -316,7 +311,7 @@ main <- function(d) {
   watermask <- getWaterMask(pred_water, Tile_size_water, Lower_than, Minimum_water_probability, datestring, Output_Directory_site)
   
   if (!(typeof(watermask[[1]])=="S4")) {
-    watermask <- getWaterMask(pred_water, Tile_size_water2, Lower_than, Minimum_water_probability, NA, datestring, Output_Directory_site)
+    watermask <- getWaterMask(pred_water, Tile_size_water2, Lower_than, Minimum_water_probability, datestring, Output_Directory_site)
     if (!(typeof(watermask[[1]])=="S4")) {
       cat("WARNING: No water mask derived for", prettydatestring,"because no valid water threshold was found.\n")
       return()
@@ -335,36 +330,42 @@ main <- function(d) {
   # ----------------------
   
   if (SAR) {
-    search_pattern <- paste0('*', sprintf("%04d",year), sprintf("%02d",SARmonth), '*SFRQWATER*.tif$')
+    search_pattern <- paste0('*', sprintf("%04d",SARyear), sprintf("%02d",SARmonth), '*SFRQWATER*.tif$')
     SARfiles <- list.files(Directory_containing_SAR, pattern = glob2rx(search_pattern), full.names = TRUE,
                            include.dirs = TRUE, recursive = TRUE)
     
     if (length(SARfiles)!=0) {
       
-      SARimgs <- c()
-      for (f in SARfiles) {
-        img <- raster(f)
-        img <- projectRaster(img, watermask[[3]], method="bilinear")
-        SARimgs <- c(SARimgs, img)
+      if (length(SARfiles) > 1) {
+        SARimgs <- c()
+        for (f in SARfiles) {
+          img <- raster(f)
+          img <- projectRaster(img, watermask[[3]], method="bilinear")
+          SARimgs <- c(SARimgs, img)
+        }
+      
+        rasters1.mosaicargs <- SARimgs
+        rasters1.mosaicargs$fun <- mean
+        waterFreq_SAR <- do.call(raster::mosaic, rasters1.mosaicargs)
+      } else {
+        waterFreq_SAR <- raster(SARfiles[1])
+        waterFreq_SAR <- projectRaster(waterFreq_SAR, watermask[[3]], method="bilinear")
       }
-      
-      rasters1.mosaicargs <- SARimgs
-      rasters1.mosaicargs$fun <- mean
-      waterFreq_SAR <- do.call(mosaic, rasters1.mosaicargs)
-      
-      waterFreq_SAR <- projectRaster(waterFreq_SAR, watermask[[3]], method="bilinear")
+
       waterFreq_SAR[waterFreq_SAR==0] <- 0.1
       # Get joined water mask
-      watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 100, FALSE, 20, "SAR", Output_Directory_site)
+      watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 100, FALSE, 0, "SAR", Output_Directory_site)
       if (!(typeof(watermaskSAR[[1]])=="S4")) {
-        watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 25, FALSE, 20, "SAR", Output_Directory_site)
-        if ((typeof(watermaskSAR[[1]])=="S4")) {
-          # Set pixels outside of potential water body mask to 0 (dry)
-          watermaskSAR[[1]][watermask[[3]]==0] <- 0
-          # Join all masks
-          watermask[[1]][watermaskSAR[[1]]==1] <- 1
-        }
+        watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 50, FALSE, 0, "SAR", Output_Directory_site)
       }
+
+      if ((typeof(watermaskSAR[[1]])=="S4")) {
+        # Set pixels outside of potential water body mask to 0 (dry)
+        watermaskSAR[[1]][watermask[[3]]==0] <- 0
+        # Join all masks
+        watermask[[1]][watermaskSAR[[1]]==1] <- 1
+      }
+
     } else {
       cat("No SAR water frequency found for ", year, " - ", month)
     }
@@ -381,7 +382,7 @@ main <- function(d) {
   # SAVE TO FILE
   # ------------
   
-  if (Plot_water_probability){
+  if (Plot_water_probability) {
     outfile_predWater <- file.path(Output_Directory_site, paste0(outfile_name, "_water_probability.tif"))
     rf <- writeRaster(pred_water / 10., filename = outfile_predWater, format = "GTiff", datatype='INT2U', overwrite = TRUE)
   }
@@ -452,5 +453,3 @@ sink()
 rp.messagebox("Water detection was successful!")
 removeTmpFiles()
 sink()
-
-

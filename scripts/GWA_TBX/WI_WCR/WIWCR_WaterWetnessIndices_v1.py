@@ -33,17 +33,17 @@ debug = False
 
 if debug:
     # TEST PARAMETERS
-    path_output = r"I:\2687_GW_A\Toolbox\02_InterimProducts\site_02"
-    path_imagery = r"T:\Processing\2687_GW_A\01_RawData\Imagery\workshop\otherwetland\zipped"
-    path_AOI = r"T:\Processing\2687_GW_A\01_RawData\Ancillary_Data\workshop\Shapefiles_Lake_Wet\Wetland.shp"
+    path_output = r"I:\temp\TBX_test\new"
+    path_imagery = r"K:\Trainingkit_WI\01_RawData\Imagery\Sentinel-2"
+    path_AOI = r"K:\Trainingkit_WI\01_RawData\AncillaryData\AOI\Wetland.shp"
     sensor = 0
     maxCloudCover = 100.
     tileID = ""
     WCRonly = False
     extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
     projWkt = 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]'
-    startDate = ""
-    endDate = ""
+    startDate = "20170201"
+    endDate = "20170228"
     AOItype=0
     here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
 
@@ -56,6 +56,7 @@ import logging
 import fnmatch
 import datetime as dt
 import zipfile
+
 
 # Load additional library
 if not debug:
@@ -89,10 +90,10 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         bands.append(scene.getBand(b, masked=True))
 
     # Band minimum value
-    minimum = abs(min(0, np.nanmin(bands)))# + 10
-    bands = [band + minimum for band in bands]
+    #minimum = abs(min(0, np.nanmin(bands)))# + 10
+    #bands = [band + minimum for band in bands]
     bands = np.array(bands)
-    invalidPixels = np.nansum(np.isnan(bands), axis=0)
+    invalidPixels = np.nansum(np.isnan(bands) | (bands == 0), axis=0)
     bands = np.where(invalidPixels>0, np.nan, bands)
 
     # Assign arrays to spectral bands
@@ -123,7 +124,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         NDVI = rsu.padArray(NDVI, scene.geotrans, scene.proj, extentAOI)
     # Save to NDVI to file
     NDVI = np.where(mask == 1, nodata, NDVI)
-    rsu.array2raster(NDVI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDVI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del NDVI
 
     # NDWI (McFeeters, 1996) and Normalized Difference Water Index
@@ -136,7 +137,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (NDWI.shape[1] < extentAOI.ncol) or (NDWI.shape[0] < extentAOI.nrow):
         NDWI = rsu.padArray(NDWI, scene.geotrans, scene.proj, extentAOI)
     NDWI = np.where(mask == 1, nodata, NDWI)
-    rsu.array2raster(NDWI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del NDWI
 
     # mNDWI (Xu ,2006)
@@ -149,7 +150,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (MNDWI.shape[1] < extentAOI.ncol) or (MNDWI.shape[0] < extentAOI.nrow):
         MNDWI = rsu.padArray(MNDWI, scene.geotrans, scene.proj, extentAOI)
     MNDWI = np.where(mask == 1, nodata, MNDWI)
-    rsu.array2raster(MNDWI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(MNDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del MNDWI
 
     if not WCRonly:
@@ -163,7 +164,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (NDMI.shape[1] < extentAOI.ncol) or (NDMI.shape[0] < extentAOI.nrow):
             NDMI = rsu.padArray(NDMI, scene.geotrans, scene.proj, extentAOI)
         NDMI = np.where(mask == 1, nodata, NDMI)
-        rsu.array2raster(NDMI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(NDMI,  extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
         del NDMI
 
         # Norm Diff GREEN - SWIR2
@@ -187,7 +188,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (ND0406.shape[1] < extentAOI.ncol) or (ND0406.shape[0] < extentAOI.nrow):
             ND0406 = rsu.padArray(ND0406, scene.geotrans, scene.proj, extentAOI)
         ND0406 = np.where(mask == 1, nodata, ND0406)
-        rsu.array2raster(ND0406,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(ND0406,  extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
         del ND0406
 
         # Normalized Multi-band Drought Index (NMDI)
@@ -251,9 +252,7 @@ path_indices= os.path.join(path_output, "indices")
 if not os.path.exists(path_indices):
     os.mkdir(path_indices)
 
-path_cloudmasks= os.path.join(path_output, "cloudmasks")
-if not os.path.exists(path_cloudmasks):
-    os.mkdir(path_cloudmasks)
+
 
 # Search for scene directories  --------------------------------------------------------------
 if sensor == "Sentinel":
@@ -289,7 +288,7 @@ if sensor == "Sentinel":
                 else:
                     sceneDirs_ID.append([sceD, None])
 
-        except Exception,e:
+        except Exception as e:
             if not debug:
                 raise GeoAlgorithmExecutionException("Invalid input data: Invalid file in 'Directory containing imagery': %s " % sceD)
             else:
@@ -315,9 +314,9 @@ for sD in sceneDirs:
 
     try:
         if sensor == "Landsat":
-            newScene = rsu.LandsatScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
+            newScene = rsu.LandsatScene(sD[0], ID=sD[1])
         elif sensor == "Sentinel":
-            newScene = rsu.SentinelScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
+            newScene = rsu.SentinelScene(sD[0], ID=sD[1])
 
         if tileID is None or (tileID in newScene.tileID):
             scenes.append(newScene)
@@ -330,7 +329,7 @@ for sD in sceneDirs:
             progress.setText("WARNING: Scene is skipped. (%s)" % (e))
         else:
             print("WARNING: Scene skipped. (%s)" % (e))
-    except Exception, e:
+    except Exception as e:
         if not debug:
             progress.setText("ERROR: Scene is skipped. (%s)" % (e))
         else:
@@ -427,7 +426,7 @@ for sce in scenes:
     # Check whether scene is within AOI
     try:
         sce.updateExtent(extentAOI)
-    except RuntimeWarning, e:
+    except RuntimeWarning as e:
         print("%s not within AOI." % sce.ID)
         if not debug:
             progress.setText("%s not within AOI." % sce.ID)
@@ -504,7 +503,7 @@ for date in uniqueDates:
 
         try:
             rsu.createVRT(inFiles, mergedOutfile, separate=False)
-        except Exception, e:
+        except Exception as e:
             if not debug:
                 progress.setText("ERROR: %s" % e)
             else:
@@ -513,7 +512,6 @@ for date in uniqueDates:
 # Update progress bar
 if not debug:
     progress.setPercentage(100)
-
 
 
 

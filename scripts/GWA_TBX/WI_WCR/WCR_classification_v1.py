@@ -16,7 +16,7 @@
 ##Water Cycle Regime Classfication = name
 ##Water Cycle Regime=group
 
-##ParameterFile|path_input|Directory containing water masks|True|False
+##ParameterFile|pathIN|Directory containing water masks|True|False
 ##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
@@ -30,7 +30,7 @@ debug = False
 
 # test paths
 if debug:
-    path_input = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI\SE_wat45_wet50_win1800_mmu3"
+    pathIN = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI\SE_wat45_wet50_win1800_mmu3"
     path_output = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WCR"
     exportSeasonalFrequencies = True
     startDate = ""
@@ -50,6 +50,8 @@ from shutil import copyfile
 from os.path import expanduser
 import datetime as dt
 import time
+
+starttime = time.time()
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
@@ -99,7 +101,7 @@ def calculateFrequency(inFiles, extent):
 
 # Check input parameters ------------------------------------------------------------------------------
 
-if not os.path.exists(path_input):
+if not os.path.exists(pathIN):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Directory containing water masks' does not exist.")
     print("Invalid input parameters: 'Directory containing water masks' does not exist.")
@@ -149,7 +151,7 @@ if endDate < startDate:
 # WATER occurance and frequency =========================================================
 
 # Search water masks
-waterMaskFiles = [os.path.join(path_input, f) for f in fnmatch.filter(os.listdir(path_input), "*_watermask.tif")]
+waterMaskFiles = [os.path.join(pathIN, f) for f in fnmatch.filter(os.listdir(pathIN), "*_watermask.tif")]
 
 # Check whether masks exist
 if len(waterMaskFiles) == 0:
