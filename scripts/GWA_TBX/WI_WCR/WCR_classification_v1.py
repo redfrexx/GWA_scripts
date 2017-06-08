@@ -44,10 +44,8 @@ if debug:
 import os, sys
 import numpy as np
 import fnmatch
-from matplotlib import pyplot as plt
 import gdal
 from shutil import copyfile
-from os.path import expanduser
 import datetime as dt
 import time
 
@@ -144,7 +142,7 @@ else:
         if not debug:
             raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'End date' is not valid.")
 
-if endDate < startDate:
+if endDate is not None and startDate is not None and endDate < startDate:
     raise GeoAlgorithmExecutionException("Invalid input parameters: 'Start date'  must be earlier than 'End date'.")
 
 
