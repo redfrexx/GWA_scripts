@@ -2,7 +2,8 @@
 
 export(aggregateIndices)
 export(getWaterMask)
+export(getWaterMask_SAR)
 export(getWetMask)
-export(rescale01)
+export(getWetMask_SAR)
 export(sigmoid)
 export(sigmoid01)
