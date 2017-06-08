@@ -37,8 +37,6 @@ import warnings
 from shapely.geometry import Polygon
 import win32api
 
-
-
 # CLASSES ===============================================================
 
 class Scene(object):
@@ -113,14 +111,14 @@ class Scene(object):
 
         # Mask out 2 - clouds, 3 - shadow and (4 - snow --> Not for Africa)
 
-        mask = np.where((fmask == 2) | (fmask == 3), 1, 0)
+        mask = np.where((fmask == 2) | (fmask == 4), 1, 0)
         mask = np.where(np.isnan(fmask), np.nan, mask)
 
         del fmask
 
         # Buffer masks
-        mask = binaryBuffer(mask, size=1)
-        mask = removeNoise_oneSide(mask)
+        #mask = binaryBuffer(mask, size=1)
+        #mask = removeNoise_oneSide(mask)
 
         return mask
 
@@ -318,12 +316,11 @@ class SentinelScene(Scene):
             for b in bandEndings:
                 self.files += [os.path.join(bandsDir, f) for f in fnmatch.filter(os.listdir(bandsDir), "*"+b+".jp2")]
 
-        # cloud mask file
-        fmask = [os.path.join(self.tempDir, b) for b in fnmatch.filter(os.listdir(self.tempDir), "*" + self.tileID + "*" + self.date.strftime("%Y%m%d") + "*_fmask.[Tt][Ii][Ff]")]
-        if len(fmask) != 0:
-            self.fmask = fmask[0]
-        else:
-            self.fmask = ""
+            fmask = [os.path.join(bandsDir, b) for b in fnmatch.filter(os.listdir(bandsDir), "*" + "*_fmask.[it][mi][gf]")]
+            if len(fmask) != 0:
+                self.fmask = fmask[0]
+            else:
+                self.fmask = ""
 
 
     def getBand(self, bandNo=1, masked=True, extent=None):
@@ -353,6 +350,8 @@ class SentinelScene(Scene):
             mask = self.getMask(extent=extent)
             if mask is not None:
                 band = np.where((mask == 1) | (band == self.nodata), np.nan, band)
+
+        band = np.where(band == self.nodata, np.nan, band)
 
         return band
 
