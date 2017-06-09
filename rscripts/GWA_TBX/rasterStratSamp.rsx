@@ -8,7 +8,7 @@
 
 ##Sample_Points= output vector
 
-Rpath <- file.path(Sys.getenv("USERPROFILE"), ".qgis2", "processing", "rscripts", "kegr_tools", fsep="\\")
+Rpath <- file.path(Sys.getenv("USERPROFILE"), ".qgis2", "processing", "rscripts", "GWA_TBX", fsep="\\")
 
 fun_path <-paste(Rpath, '\\rastStratSamp.R', sep='')
 

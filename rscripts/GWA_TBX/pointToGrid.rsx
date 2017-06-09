@@ -10,7 +10,7 @@ tryCatch(find.package("rpanel"), error=function(e) install.packages("rpanel", li
 
 library('rpanel')
 
-Rpath <- file.path(Sys.getenv("USERPROFILE"), ".qgis2", "processing", "rscripts", "kegr_tools", fsep="\\")
+Rpath <- file.path(Sys.getenv("USERPROFILE"), ".qgis2", "processing", "rscripts", "GWA_TBX", fsep="\\")
 
 fun_path <-paste(Rpath, '\\pointToGrid.R', sep='')
 
