@@ -7,11 +7,11 @@
 # 
 # 
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+__version__ = "1.0"
 
 ##Water and Wetness Indices=name
 ##Wetland Inventory=group
@@ -33,9 +33,9 @@ debug = False
 
 if debug:
     # TEST PARAMETERS
-    path_output = r"I:\temp\TBX_test\new"
-    path_imagery = r"K:\Trainingkit_WI\01_RawData\Imagery\Sentinel-2"
-    path_AOI = r"K:\Trainingkit_WI\01_RawData\AncillaryData\AOI\Wetland.shp"
+    path_output = r""
+    path_imagery = r""
+    path_AOI = r""
     sensor = 0
     maxCloudCover = 100.
     tileID = ""
@@ -45,7 +45,7 @@ if debug:
     startDate = "20170201"
     endDate = "20170228"
     AOItype=0
-    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
+    here = r""
 
 # IMPORTS ----------------------------------------------------------------------------------------------
 import os, sys

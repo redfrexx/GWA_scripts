@@ -6,12 +6,12 @@
 # licensing by GeoVille GmbH.
 # 
 # 
-# Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date created: 09.06.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+__version__ = "1.0"
 
 ##Water Cycle Regime Classfication = name
 ##Water Cycle Regime=group
@@ -30,8 +30,8 @@ debug = False
 
 # test paths
 if debug:
-    pathIN = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WI\SE_wat45_wet50_win1800_mmu3"
-    path_output = r"T:\Processing\2687_GW_A\03_Products\GWA-TOOLBOX\02_InterimProducts\WCR"
+    pathIN = r""
+    path_output = r""
     exportSeasonalFrequencies = True
     startDate = ""
     endDate = ""
@@ -48,6 +48,7 @@ import gdal
 from shutil import copyfile
 import datetime as dt
 import time
+from processing.tools import dataobjects
 
 starttime = time.time()
 
@@ -202,14 +203,13 @@ for season in seasons:
         outfile_name = os.path.join(pathOUT_freqs, os.path.basename(dest) + '.qml')
         copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
+validPixels = np.array(validPixels)
+validObs = np.nansum(validPixels, axis=0)
 
 waterFreqs = np.array(waterFreqs)
 waterFreq_all = np.nansum(waterFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
 del waterFreqs
-
-validPixels = np.array(validPixels)
-validObs = np.nansum(validPixels, axis=0)
 
 waterFreq_all = np.where(validObs == 0, np.nan, waterFreq_all)
 
@@ -249,6 +249,7 @@ rsu.array2raster(waterFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
+dataobjects.load(dest, os.path.basename(dest))
 
 # CLASSIFICATION
 
@@ -276,4 +277,6 @@ rsu.array2raster(classification, geotrans, proj, dest, gdal.GDT_Byte, 255)
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "classification_water.qml"), outfile_name)
 
+dataobjects.load(dest, os.path.basename(dest))
 
+progress.setConsoleInfo('Classification successful!')

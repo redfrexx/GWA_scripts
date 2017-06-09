@@ -9,7 +9,7 @@
 Support functions and classes for raster handling
 
 Date created: 09/06/2016
-Date last modified: 09/05/2017
+Date last modified: 09/06/2017
 
 """
 
