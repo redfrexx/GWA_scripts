@@ -643,32 +643,6 @@ rf <- writeRaster(certainty, filename = outfile_quality_wet, format = "GTiff", d
 
 }
 
-# Benchmarking
-delta = proc.time() - starttime
-deltaStr = paste(floor(delta[3] / 60.)," min, ", round((delta[3] %% 60.),2)," sec"," ")
-logfile = file.path(Output_Directory, paste0("Benchmark_WaterWetnessDetection_",substr(Sys.time(),1,10),"-",substr(Sys.time(),12,13),substr(Sys.time(),15,16),".txt"))
-sink(logfile)
-cat("Execution time: ",deltaStr, "\n\n")
-cat("Directory_containing_indices:", Directory_containing_indices,"\n")
-cat("Directory_containing_TWI", Directory_containing_TWI,"\n")
-cat("Directory_containing_SAR", Directory_containing_SAR,"\n")
-cat("Output_Directory" ,Output_Directory,"\n")
-cat("Plot_water_and_wetness_probability" ,Plot_water_and_wetness_probability,"\n")
-cat("Minimum_water_probability" ,Minimum_water_probability,"\n" )
-cat("Minimum_wetness_probability" ,Minimum_wetness_probability,"\n" )
-cat("Minimum_AOI_coverage", Minimum_AOI_coverage,"\n")
-cat("Start_Date", Start_Date,"\n")
-cat("End_Date" ,End_Date,"\n")
-cat("Tile_size_in_meter", Tile_size_in_meter,"\n")
-cat("Minimum_mapping_unit" ,Minimum_mapping_unit,"\n")
-cat("Plot_certainty_indicator", Plot_certainty_indicator,"\n")
-cat("Global_threshold_based_on", Global_threshold_based_on,"\n")
-cat("Plot_certainty_indicator", Plot_certainty_indicator,"\n")
-sink()
-
 rp.messagebox("Water and wetness detection was successful!")
-
 removeTmpFiles()
-if (!debug) {
-sink()
-}
+
