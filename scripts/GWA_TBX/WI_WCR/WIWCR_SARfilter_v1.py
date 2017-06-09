@@ -7,11 +7,11 @@
 # 
 # 
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+ __version__ = "1.0"
 
 
 ##Filter SAR water and wetness frequencies=name
@@ -25,8 +25,8 @@ debug = False
 
 # -> Test Parameteres
 if debug:
-    inDir = r"T:\Processing\2687_GW_A\02_Interim_Products\SAR\site_98\EQUI7_AF010M"
-    path_output = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts"
+    inDir = r""
+    path_output = r""
     water = True
     wetness = False
 
