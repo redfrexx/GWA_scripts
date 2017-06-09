@@ -56,6 +56,7 @@ import logging
 import fnmatch
 import datetime as dt
 import zipfile
+from processing.tools import dataobjects
 
 
 # Load additional library
@@ -442,6 +443,7 @@ for sce in scenes:
 
     scenesWithinExtent.append(sce)
     sce.createVRT(path_vrt)
+    dataobjects.load(sce.VRTfile, os.path.basename(sce.VRTfile))
 
 scenes = scenesWithinExtent
 if len(scenes) == 0:
