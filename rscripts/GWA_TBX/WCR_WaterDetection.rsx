@@ -7,7 +7,7 @@
 #
 #
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 #
 #
 # __author__ = "Christina Ludwig"
@@ -33,17 +33,19 @@
 ##Plot_water_probability= Boolean False
 ##Plot_certainty_indicator= Boolean False
 
+sink(file.path(Output_Directory, "log.txt"))
 
 # -> Test parameters for execution in R
-debug <- T
+debug <- F
+starttime <- proc.time()
 
 if (debug) {
-  .libPaths("C:/Users/ludwig/Documents/R/win-library/3.2")
-  Directory_containing_indices= "I:/2687_GW_A/02_Interim_Products/Toolbox/02_InterimProducts/test_S2/indices"
-  Directory_containing_TWI= "I:/2687_GW_A/02_Interim_Products/Toolbox/TWI" #X:/02_Interim_Products/run_09/site98/TWI"
+  .libPaths("C:\\Users\\ludwig\\.qgis2\\processing\\rlibs")
+  Directory_containing_indices= "T:\\Processing\\2687_GW_A\\03_Products\\GWA-TOOLBOX\\02_InterimProducts\\WCR\\indices"
+  Directory_containing_TWI= "T:\\Processing\\2687_GW_A\\03_Products\\GWA-TOOLBOX\\02_InterimProducts\\TWI"
   #Directory_containing_SAR= "T:/Processing/2687_GW_A/02_Interim_Products/SAR/site_98/EQUI7_AF010M/E014N068T1/Seasonal"#
   Directory_containing_SAR= "" # "T:/Processing/2687_GW_A/02_Interim_Products/SAR/site_98/EQUI7_AF010M"
-  Output_Directory="I:/2687_GW_A/02_Interim_Products/Toolbox/02_InterimProducts/test_S2"
+  Output_Directory="T:\\Processing\\2687_GW_A\\03_Products\\GWA-TOOLBOX\\02_InterimProducts\\test"
   Plot_water_probability <- T
   Minimum_water_probability = 45
   Minimum_AOI_coverage <- 40
@@ -55,24 +57,13 @@ if (debug) {
 }
 Increase_sensitivity=FALSE
 
-#if("raster" %in% rownames(installed.packages()) == FALSE) {install.packages("raster")}
-#if("rgdal" %in% rownames(installed.packages()) == FALSE) {install.packages("rgdal")}
-#if("pastecs" %in% rownames(installed.packages()) == FALSE) {install.packages("pastecs")}
-#if("plyr" %in% rownames(installed.packages()) == FALSE) {install.packages("plyr")}
-#if("doParallel" %in% rownames(installed.packages()) == FALSE) {install.packages("doParallel")}
-#if("foreach" %in% rownames(installed.packages()) == FALSE) {install.packages("foreach")}
-#install.packages("O:/2687_GW_A/04_CODE/R/compiledPackages/GWAutils.zip", repos=NULL, type="win.binary")
-
+#sink(file.path(Output_Directory, "log.txt"))
 
 library(raster)
 library(rgdal)
-library(pastecs)
-library(plyr)
-library(doParallel)
-library(foreach)
-library(GWAutils)
 library(rpanel)
 library(stringr)
+library(GWAutils)
 
 Start_Date <- str_trim(Start_Date)
 End_Date <- str_trim(End_Date)
@@ -102,15 +93,6 @@ pythonPath = ""
 
 # Set raster settings ----------------------------------------------------
 
-#sink(file.path(Output_Directory, "log.txt"))
-
-tmpDirectory = file.path("/tmp/", basename(dirname(Directory_containing_TWI)))
-if (!file.exists(tmpDirectory)) {
-  dir.create(tmpDirectory, recursive=TRUE)
-}
-rasterOptions(tmpdir=tmpDirectory)
-removeTmpFiles(h=0.25)
-rasterOptions(maxmemory=10000000)
 
 # CHECK INPUT PARAMETERS ------------------------------------------------
 
@@ -277,22 +259,15 @@ if (length(pathTWImask)==0) {
 }
 
 
-# TWI
-search_pattern <- paste0(substr(Title,1,2),'*TWI_resampled.tif$')
-pathTWI <- list.files(Directory_containing_TWI, pattern = glob2rx(search_pattern), full.names = TRUE,
-                      include.dirs = TRUE, recursive = TRUE)
-
 
 # 2.  Compute WATER and WETNESS masks
 # -----------------------------------
 
 main <- function(d) {
   
-  rasterOptions(tmpdir=tmpDirectory)
-  rasterOptions(maxmemory=100000000)
-  removeTmpFiles(0.25)
+  rasterOptions(maxmemory=1000000000)
+  removeTmpFiles(0.1)
   
-  twi <- raster(pathTWI)
   twimask <- raster(pathTWImask)
   
   # Get year and month
@@ -336,7 +311,7 @@ main <- function(d) {
   watermask <- getWaterMask(pred_water, Tile_size_water, Lower_than, Minimum_water_probability, datestring, Output_Directory_site)
   
   if (!(typeof(watermask[[1]])=="S4")) {
-    watermask <- getWaterMask(pred_water, Tile_size_water2, Lower_than, Minimum_water_probability, NA, datestring, Output_Directory_site)
+    watermask <- getWaterMask(pred_water, Tile_size_water2, Lower_than, Minimum_water_probability, datestring, Output_Directory_site)
     if (!(typeof(watermask[[1]])=="S4")) {
       cat("WARNING: No water mask derived for", prettydatestring,"because no valid water threshold was found.\n")
       return()
@@ -350,41 +325,47 @@ main <- function(d) {
     rf <- writeRaster(qualityWater, filename = outfile_qualityWater, format = "GTiff", datatype='INT2S', overwrite = TRUE)
   }
   
-    
+  
   # RADAR BASED WATER MASK
   # ----------------------
   
   if (SAR) {
-    search_pattern <- paste0('*', sprintf("%04d",year), sprintf("%02d",SARmonth), '*SFRQWATER*.tif$')
+    search_pattern <- paste0('*', sprintf("%04d",SARyear), sprintf("%02d",SARmonth), '*SFRQWATER*.tif$')
     SARfiles <- list.files(Directory_containing_SAR, pattern = glob2rx(search_pattern), full.names = TRUE,
                            include.dirs = TRUE, recursive = TRUE)
     
     if (length(SARfiles)!=0) {
       
-      SARimgs <- c()
-      for (f in SARfiles) {
-        img <- raster(f)
-        img <- projectRaster(img, watermask[[3]], method="bilinear")
-        SARimgs <- c(SARimgs, img)
+      if (length(SARfiles) > 1) {
+        SARimgs <- c()
+        for (f in SARfiles) {
+          img <- raster(f)
+          img <- projectRaster(img, watermask[[3]], method="bilinear")
+          SARimgs <- c(SARimgs, img)
+        }
+      
+        rasters1.mosaicargs <- SARimgs
+        rasters1.mosaicargs$fun <- mean
+        waterFreq_SAR <- do.call(raster::mosaic, rasters1.mosaicargs)
+      } else {
+        waterFreq_SAR <- raster(SARfiles[1])
+        waterFreq_SAR <- projectRaster(waterFreq_SAR, watermask[[3]], method="bilinear")
       }
-      
-      rasters1.mosaicargs <- SARimgs
-      rasters1.mosaicargs$fun <- mean
-      waterFreq_SAR <- do.call(mosaic, rasters1.mosaicargs)
-      
-      waterFreq_SAR <- projectRaster(waterFreq_SAR, watermask[[3]], method="bilinear")
+
       waterFreq_SAR[waterFreq_SAR==0] <- 0.1
       # Get joined water mask
-      watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 100, FALSE, 20, "SAR", Output_Directory_site)
+      watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 100, FALSE, 0, "SAR", Output_Directory_site)
       if (!(typeof(watermaskSAR[[1]])=="S4")) {
-        watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 25, FALSE, 20, "SAR", Output_Directory_site)
-        if ((typeof(watermaskSAR[[1]])=="S4")) {
-          # Set pixels outside of potential water body mask to 0 (dry)
-          watermaskSAR[[1]][watermask[[3]]==0] <- 0
-          # Join all masks
-          watermask[[1]][watermaskSAR[[1]]==1] <- 1
-        }
+        watermaskSAR <- getWaterMask_SAR(waterFreq_SAR, 50, FALSE, 0, "SAR", Output_Directory_site)
       }
+
+      if ((typeof(watermaskSAR[[1]])=="S4")) {
+        # Set pixels outside of potential water body mask to 0 (dry)
+        watermaskSAR[[1]][watermask[[3]]==0] <- 0
+        # Join all masks
+        watermask[[1]][watermaskSAR[[1]]==1] <- 1
+      }
+
     } else {
       cat("No SAR water frequency found for ", year, " - ", month)
     }
@@ -401,7 +382,7 @@ main <- function(d) {
   # SAVE TO FILE
   # ------------
   
-  if (Plot_water_probability){
+  if (Plot_water_probability) {
     outfile_predWater <- file.path(Output_Directory_site, paste0(outfile_name, "_water_probability.tif"))
     rf <- writeRaster(pred_water / 10., filename = outfile_predWater, format = "GTiff", datatype='INT2U', overwrite = TRUE)
   }
@@ -413,11 +394,6 @@ main <- function(d) {
   outfile_sieveRaw = file.path(Output_Directory_site, paste0(outfile_name, '_watermask_sieveRaw.tif'))
   cmd = paste(paste0(pythonPath, "gdal_sieve"), "-st", mmu_water,"-8", outfile_waterMask, outfile_sieveRaw, sep=" ")
   sucess <- try(system(cmd))
-  
-  if (sucess != 0) {
-    cmd2 = paste(paste0(pythonPath, "gdal_sieve.py"), "-st", mmu_water,"-8", outfile_waterMask, outfile_sieveRaw, sep=" ")
-    system(cmd2)
-  }
   
   # Convert
   outfile_sieve = file.path(Output_Directory_site, paste0(outfile_name, '_watermask.tif'))
@@ -438,7 +414,7 @@ for (d in dates) {
 if (Plot_certainty_indicator) {
   search_pattern <- paste0('*water_certainty.tif$')
   qualityWaterFiles <- list.files(Output_Directory_site, pattern = glob2rx(search_pattern), full.names = TRUE,
-                         include.dirs = TRUE, recursive = TRUE)
+                                  include.dirs = TRUE, recursive = TRUE)
   qualityRas <- c()
   for (f in qualityWaterFiles) {
     ras <- raster(f)
@@ -447,7 +423,7 @@ if (Plot_certainty_indicator) {
   
   qualityRas <- brick(qualityRas)
   valid <- sum(!is.na(qualityRas))
-  certainty <- sum(qualityRas, na.rm=T) / valid  
+  certainty <- sum(qualityRas, na.rm=T) / valid
   
   outfile_quality_water <- file.path(Output_Directory_site, paste0(Title, "_water_overallCertainty.tif"))
   rf <- writeRaster(qualityRas, filename = outfile_quality_water, format = "GTiff", datatype='INT2S', overwrite = TRUE)
@@ -455,4 +431,3 @@ if (Plot_certainty_indicator) {
 
 rp.messagebox("Water detection was successful!")
 removeTmpFiles()
-sink()

@@ -40,7 +40,8 @@ here = os.path.dirname(scriptDescriptionFile)
 pyDir = os.path.join(here, 'data', 'python')
 if pyDir not in sys.path:
     sys.path.append(pyDir)
-	
+
+
 import RSutils.RSutils as rsu
 
 

@@ -7,16 +7,16 @@
 # 
 # 
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+__version__ = "1.0"
 
 ##Wetland Inventory Classification = name
 ##Wetland Inventory=group
-##ParameterFile|pathIN|Directory containing water and wetness masks|True|False
-##OutputDirectory|pathOUT|Output directory
+##ParameterFile|path_input|Directory containing water and wetness masks|True|False
+##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water and wetness frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
 ##*ParameterString|endDate|End date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
@@ -29,16 +29,16 @@ debug = False
 
 # test paths
 if debug:
-    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterWetnessMasks_wat450_wet500_win1800_mmu3"
-    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterWetnessMasks_wat450_wet500_win1800_mmu3"
+    path_input = r""
+    path_output = r""
     exportSeasonalFrequencies = True
-    startDate = "20170101"
-    endDate = "20170930"
+    startDate = ""
+    endDate = ""
     spring = True
     summer = True
     fall = True
     winter = True
-    here = "."
+    here = r""
 
 import os, sys
 import numpy as np
@@ -46,6 +46,8 @@ import fnmatch
 import gdal
 from shutil import copyfile
 import datetime as dt
+import time
+from processing.tools import dataobjects
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
@@ -93,18 +95,18 @@ def calculateFrequency(inFiles, extent):
 
 # Check input parameters ------------------------------------------------------------------------------
 
-if not os.path.exists(pathIN):
+if not os.path.exists(path_input):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Directory containing water and wetness masks' does not exist.")
     print("Invalid input parameters: 'Directory containing water and wetness masks' does not exist.")
 
-if not os.path.exists(pathOUT):
+if not os.path.exists(path_output):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Output directory' does not exist.")
     print("Invalid input parameters: 'Output directory' does not exist.")
 
 
-pathOUT_class = os.path.join(pathOUT,"classification_WI")
+pathOUT_class = os.path.join(path_output, "classification_WI")
 if not os.path.exists(pathOUT_class):
     os.mkdir(pathOUT_class)
 
@@ -141,8 +143,8 @@ if endDate is not None and startDate is not None and endDate < startDate:
 # WATER occurance and frequency =========================================================
 
 # Search water masks
-waterMaskFiles = [os.path.join(pathIN, f) for f in fnmatch.filter(os.listdir(pathIN), "*_watermask.tif")]
-wetMaskFiles = [os.path.join(pathIN, f) for f in fnmatch.filter(os.listdir(pathIN), "*wetmask.tif")]
+waterMaskFiles = [os.path.join(path_input, f) for f in fnmatch.filter(os.listdir(path_input), "*_watermask.tif")]
+wetMaskFiles = [os.path.join(path_input, f) for f in fnmatch.filter(os.listdir(path_input), "*wetmask.tif")]
 
 # Check whether masks exist
 if len(waterMaskFiles) == 0:
@@ -233,21 +235,21 @@ for season in seasons:
 validPixels = np.array(validPixels)
 validObs = np.nansum(validPixels, axis=0)
 
+validPixels_wet = np.array(validPixels_wet)
+validObs_wet = np.nansum(validPixels_wet, axis=0)
+
 waterFreqs = np.array(waterFreqs)
 waterFreq_all = np.nansum(waterFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
 wetFreqs = np.array(wetFreqs)
 wetFreq_all = np.nansum(wetFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
-validPixels_wet = np.array(validPixels_wet)
-validObs_wet = np.nansum(validPixels_wet, axis=0)
-
-wetFreq_all = np.where((validObs_water == 0) | (validObs_wet==0), np.nan, wetFreq_all)
-waterFreq_all = np.where(validObs_water == 0, np.nan, waterFreq_all)
+wetFreq_all = np.where((validObs == 0), np.nan, wetFreq_all)
+waterFreq_all = np.where(validObs == 0, np.nan, waterFreq_all)
 
 del wetFreqs, waterFreqs, validPixels
 
-if np.nansum(validObs_water) == 0:
+if np.nansum(validObs) == 0:
     if not debug:
         raise GeoAlgorithmExecutionException("No water masks found")
     else:
@@ -295,7 +297,7 @@ classification = np.where(classification == 10, 0, classification)
 
 file_name = "WI_total_NUMOB"
 dest = os.path.join(pathOUT_class, file_name + '.tif')
-rsu.array2raster(validObs_water, geotrans, proj, dest, gdal.GDT_Byte, 255)
+rsu.array2raster(validObs, geotrans, proj, dest, gdal.GDT_Byte, 255)
 
 file_name = "WI_water_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
@@ -304,6 +306,7 @@ rsu.array2raster(waterFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
+dataobjects.load(dest, os.path.basename(dest))
 
 file_name = "WI_dry_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
@@ -314,10 +317,6 @@ outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 # Wet frequency
-#file_name = "wetness_occurance"
-#dest = os.path.join(pathOUT_class, file_name + '.tif')
-#rsu.array2raster(wetSum, geotrans, proj, dest, gdal.GDT_Byte, 255)
-
 file_name = "WI_wetness_frequency"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
 rsu.array2raster(wetFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
@@ -325,9 +324,9 @@ rsu.array2raster(wetFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
+dataobjects.load(dest, os.path.basename(dest))
 
 # CLASSIFICATION
-
 file_name = "WI_classification"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
 rsu.array2raster(classification, geotrans, proj, dest, gdal.GDT_Byte, 255)
@@ -335,9 +334,9 @@ rsu.array2raster(classification, geotrans, proj, dest, gdal.GDT_Byte, 255)
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "classification_waterWetness.qml"), outfile_name)
+dataobjects.load(dest, os.path.basename(dest))
 
 # WWPI
-
 file_name = "WI_WWPI"
 dest = os.path.join(pathOUT_class,  file_name + '.tif')
 rsu.array2raster(WWPI, geotrans, proj, dest, gdal.GDT_Byte, 255)
@@ -345,7 +344,8 @@ rsu.array2raster(WWPI, geotrans, proj, dest, gdal.GDT_Byte, 255)
 # qml file
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "WWPI.qml"), outfile_name)
+dataobjects.load(dest, os.path.basename(dest))
 
 del waterFreq_all, wetFreq_all
 
-
+progress.setConsoleInfo('Classification successful!')

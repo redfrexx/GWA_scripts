@@ -9,7 +9,7 @@
 Support functions and classes for raster handling
 
 Date created: 09/06/2016
-Date last modified: 09/05/2017
+Date last modified: 09/06/2017
 
 """
 
@@ -20,7 +20,6 @@ import glob
 from osgeo import gdal, ogr
 from gdalconst import GA_ReadOnly
 import os, sys
-import bottleneck as bn
 import numpy as np
 from osgeo import osr
 from scipy import ndimage
@@ -37,8 +36,6 @@ import xml.etree.ElementTree as eTree
 import warnings
 from shapely.geometry import Polygon
 import win32api
-
-
 
 # CLASSES ===============================================================
 
@@ -114,14 +111,14 @@ class Scene(object):
 
         # Mask out 2 - clouds, 3 - shadow and (4 - snow --> Not for Africa)
 
-        mask = np.where((fmask == 2) | (fmask == 3), 1, 0)
+        mask = np.where((fmask == 2) | (fmask == 4), 1, 0)
         mask = np.where(np.isnan(fmask), np.nan, mask)
 
         del fmask
 
         # Buffer masks
-        mask = binaryBuffer(mask, size=1)
-        mask = removeNoise_oneSide(mask)
+        #mask = binaryBuffer(mask, size=1)
+        #mask = removeNoise_oneSide(mask)
 
         return mask
 
@@ -171,8 +168,7 @@ class Scene(object):
             mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4), 1, 0)
 
             # Compute cloud coverate
-            # self.cloudCoverage = 100. - (float(bn.nansum(mask == 0)) / (float(self.extent.ncol) * float(self.extent.nrow))) * 100.
-            self.cloudy = 100. - (float(bn.nansum(mask == 0)) / nonNANpixels) * 100.
+            self.cloudy = 100. - (float(np.nansum(mask == 0)) / nonNANpixels) * 100.
 
 class SentinelScene(Scene):
     """Class to handle Sentinel-2 scenes 
@@ -250,8 +246,15 @@ class SentinelScene(Scene):
             else:
                 metadatafile = metadataMatches[0]
 
-            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), )
-            metaF = open(self.metadatafile)
+            self.metadatafile = os.path.join(win32api.GetShortPathName(os.path.dirname(metadatafile)), os.path.basename(metadatafile))
+            try:
+                metaF = open(self.metadatafile)
+            except IOError as e:
+                if len(self.metadatafile) > 256:
+                    raise IOError("File path to metadata file is too long. Move scene to a different location to shorten the file path.")
+                else:
+                    raise IOError("Meta data file could not be read.")
+
             metainfo = eTree.parse(metaF)
             rootElement = metainfo.getroot()
 
@@ -313,12 +316,11 @@ class SentinelScene(Scene):
             for b in bandEndings:
                 self.files += [os.path.join(bandsDir, f) for f in fnmatch.filter(os.listdir(bandsDir), "*"+b+".jp2")]
 
-        # cloud mask file
-        fmask = [os.path.join(self.tempDir, b) for b in fnmatch.filter(os.listdir(self.tempDir), self.ID + "*_fmask.[Tt][Ii][Ff]")]
-        if len(fmask) != 0:
-            self.fmask = fmask[0]
-        else:
-            self.fmask = ""
+            fmask = [os.path.join(bandsDir, b) for b in fnmatch.filter(os.listdir(bandsDir), "*" + "*_fmask.[it][mi][gf]")]
+            if len(fmask) != 0:
+                self.fmask = fmask[0]
+            else:
+                self.fmask = ""
 
 
     def getBand(self, bandNo=1, masked=True, extent=None):
@@ -348,6 +350,8 @@ class SentinelScene(Scene):
             mask = self.getMask(extent=extent)
             if mask is not None:
                 band = np.where((mask == 1) | (band == self.nodata), np.nan, band)
+
+        band = np.where(band == self.nodata, np.nan, band)
 
         return band
 

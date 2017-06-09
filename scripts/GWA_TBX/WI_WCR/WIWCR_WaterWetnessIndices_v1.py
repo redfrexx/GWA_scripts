@@ -7,11 +7,11 @@
 # 
 # 
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+__version__ = "1.0"
 
 ##Water and Wetness Indices=name
 ##Wetland Inventory=group
@@ -33,19 +33,19 @@ debug = False
 
 if debug:
     # TEST PARAMETERS
-    path_output = r"I:\2687_GW_A\Toolbox\02_InterimProducts\site_02"
-    path_imagery = r"T:\Processing\2687_GW_A\01_RawData\Imagery\workshop\otherwetland\zipped"
-    path_AOI = r"T:\Processing\2687_GW_A\01_RawData\Ancillary_Data\workshop\Shapefiles_Lake_Wet\Wetland.shp"
+    path_output = r""
+    path_imagery = r""
+    path_AOI = r""
     sensor = 0
     maxCloudCover = 100.
     tileID = ""
     WCRonly = False
     extentCoords = "-1851429.54238,-1831170.14094,1554149.79985,1571383.44653"
     projWkt = 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"],AUTHORITY["EPSG","3857"]]'
-    startDate = ""
-    endDate = ""
+    startDate = "20170201"
+    endDate = "20170228"
     AOItype=0
-    here = r"C:\Users\ludwig\.qgis2\processing\scripts\GWA_TBX\WI_WCR"
+    here = r""
 
 # IMPORTS ----------------------------------------------------------------------------------------------
 import os, sys
@@ -54,8 +54,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 import logging
 import fnmatch
-from datetime import datetime as dt
+import datetime as dt
 import zipfile
+
 
 # Load additional library
 if not debug:
@@ -81,7 +82,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         os.mkdir(outputDir)
 
     # Make file title
-    outputName = scene.sensorCode + "_" + scene.tileID + "_" + dt.strftime(scene.date, "%Y%m%d")
+    outputName = scene.sensorCode + "_" + scene.tileID + "_" + dt.datetime.strftime(scene.date, "%Y%m%d")
 
     # Read in bands
     bands = []
@@ -89,10 +90,10 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         bands.append(scene.getBand(b, masked=True))
 
     # Band minimum value
-    minimum = abs(min(0, np.nanmin(bands)))# + 10
-    bands = [band + minimum for band in bands]
+    #minimum = abs(min(0, np.nanmin(bands)))# + 10
+    #bands = [band + minimum for band in bands]
     bands = np.array(bands)
-    invalidPixels = np.nansum(np.isnan(bands), axis=0)
+    invalidPixels = np.nansum(np.isnan(bands) | (bands == 0), axis=0)
     bands = np.where(invalidPixels>0, np.nan, bands)
 
     # Assign arrays to spectral bands
@@ -123,7 +124,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         NDVI = rsu.padArray(NDVI, scene.geotrans, scene.proj, extentAOI)
     # Save to NDVI to file
     NDVI = np.where(mask == 1, nodata, NDVI)
-    rsu.array2raster(NDVI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDVI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del NDVI
 
     # NDWI (McFeeters, 1996) and Normalized Difference Water Index
@@ -136,7 +137,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (NDWI.shape[1] < extentAOI.ncol) or (NDWI.shape[0] < extentAOI.nrow):
         NDWI = rsu.padArray(NDWI, scene.geotrans, scene.proj, extentAOI)
     NDWI = np.where(mask == 1, nodata, NDWI)
-    rsu.array2raster(NDWI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(NDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del NDWI
 
     # mNDWI (Xu ,2006)
@@ -149,7 +150,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
     if (MNDWI.shape[1] < extentAOI.ncol) or (MNDWI.shape[0] < extentAOI.nrow):
         MNDWI = rsu.padArray(MNDWI, scene.geotrans, scene.proj, extentAOI)
     MNDWI = np.where(mask == 1, nodata, MNDWI)
-    rsu.array2raster(MNDWI, scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+    rsu.array2raster(MNDWI, extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
     del MNDWI
 
     if not WCRonly:
@@ -163,7 +164,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (NDMI.shape[1] < extentAOI.ncol) or (NDMI.shape[0] < extentAOI.nrow):
             NDMI = rsu.padArray(NDMI, scene.geotrans, scene.proj, extentAOI)
         NDMI = np.where(mask == 1, nodata, NDMI)
-        rsu.array2raster(NDMI,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(NDMI,  extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
         del NDMI
 
         # Norm Diff GREEN - SWIR2
@@ -187,7 +188,7 @@ def calculate_indices_for_scene(scene, outputDir, bandNo, extentAOI=None, WCRonl
         if (ND0406.shape[1] < extentAOI.ncol) or (ND0406.shape[0] < extentAOI.nrow):
             ND0406 = rsu.padArray(ND0406, scene.geotrans, scene.proj, extentAOI)
         ND0406 = np.where(mask == 1, nodata, ND0406)
-        rsu.array2raster(ND0406,  scene.geotrans, scene.proj, dest, gdal.GDT_Int16, nodata)
+        rsu.array2raster(ND0406,  extentAOI.getGeotrans(), extentAOI.getProj(), dest, gdal.GDT_Int16, nodata)
         del ND0406
 
         # Normalized Multi-band Drought Index (NMDI)
@@ -251,9 +252,7 @@ path_indices= os.path.join(path_output, "indices")
 if not os.path.exists(path_indices):
     os.mkdir(path_indices)
 
-path_cloudmasks= os.path.join(path_output, "cloudmasks")
-if not os.path.exists(path_cloudmasks):
-    os.mkdir(path_cloudmasks)
+
 
 # Search for scene directories  --------------------------------------------------------------
 if sensor == "Sentinel":
@@ -289,7 +288,7 @@ if sensor == "Sentinel":
                 else:
                     sceneDirs_ID.append([sceD, None])
 
-        except Exception,e:
+        except Exception as e:
             if not debug:
                 raise GeoAlgorithmExecutionException("Invalid input data: Invalid file in 'Directory containing imagery': %s " % sceD)
             else:
@@ -309,13 +308,15 @@ scenes = []
 for sD in sceneDirs:
 
     if not debug:
-        progress.setText("%s / %s" % (sD[0], sD[1]))
+        progress.setText("\n%s - %s" % (sD[0], sD[1]))
+    else:
+        print("\n%s - %s" % (sD[0], sD[1]))
 
     try:
         if sensor == "Landsat":
-            newScene = rsu.LandsatScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
+            newScene = rsu.LandsatScene(sD[0], ID=sD[1])
         elif sensor == "Sentinel":
-            newScene = rsu.SentinelScene(sD[0], ID=sD[1], tempDir=path_cloudmasks)
+            newScene = rsu.SentinelScene(sD[0], ID=sD[1])
 
         if tileID is None or (tileID in newScene.tileID):
             scenes.append(newScene)
@@ -323,11 +324,16 @@ for sD in sceneDirs:
             if not debug:
                 progress.setText("Scene not included: Tile ID doesn't match %s." % tileID)
 
-    except Exception, e:
+    except IOError as e:
         if not debug:
-            progress.setText("Error: %s. Scene is skipped." % (e))
+            progress.setText("WARNING: Scene is skipped. (%s)" % (e))
         else:
-            print "Error: %s. Scene is skipped." % e
+            print("WARNING: Scene skipped. (%s)" % (e))
+    except Exception as e:
+        if not debug:
+            progress.setText("ERROR: Scene is skipped. (%s)" % (e))
+        else:
+            print "ERROR: Scene is skipped. (%s)" % e
 
 if len(scenes) == 0:
     if not debug:
@@ -341,7 +347,7 @@ if startDate == "":
     startDate = min([sce.date for sce in scenes])
 else:
     try:
-        startDate = dt.strptime(startDate, "%Y%m%d")
+        startDate = dt.datetime.strptime(startDate, "%Y%m%d")
     except: 
         raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'Start date' is not valid.")
 
@@ -349,7 +355,7 @@ if endDate == "":
     endDate = max([sce.date for sce in scenes])
 else:
     try:
-        endDate = dt.strptime(endDate, "%Y%m%d")
+        endDate = dt.datetime.strptime(endDate, "%Y%m%d")
     except: 
         raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'End date' is not valid.")
 
@@ -396,7 +402,7 @@ elif AOItype == 1:
     path_output_extents = os.path.join(path_output, "userDefinedExtents")
     if not os.path.exists(path_output_extents):
         os.mkdir(path_output_extents)
-    extent_name = "userDefinedExtent_" + dt.today().strftime("%Y%m%d-h%Hm%M")
+    extent_name = "userDefinedExtent_" + dt.datetime.today().strftime("%Y%m%d-h%Hm%M")
     extentAOI.save_as_shp(path_output_extents, extent_name)
 
     if not debug:
@@ -420,7 +426,7 @@ for sce in scenes:
     # Check whether scene is within AOI
     try:
         sce.updateExtent(extentAOI)
-    except RuntimeWarning, e:
+    except RuntimeWarning as e:
         print("%s not within AOI." % sce.ID)
         if not debug:
             progress.setText("%s not within AOI." % sce.ID)
@@ -482,22 +488,22 @@ for date in uniqueDates:
     scenesAtdate = [sce for sce in scenes if (sce.date == date)]
 
     for index in indexFolders:
-        inFiles = [os.path.join(path_indices, index, f) for f in fnmatch.filter(os.listdir(os.path.join(path_indices, index)), "*" + dt.strftime(date, "%Y%m%d") + "*.tif")]
+        inFiles = [os.path.join(path_indices, index, f) for f in fnmatch.filter(os.listdir(os.path.join(path_indices, index)), "*" + dt.datetime.strftime(date, "%Y%m%d") + "*.tif")]
 
         if len(inFiles) == 0:
-            print("No indices found for %s" % dt.strftime(date, "%Y%m%d"))
+            print("No indices found for %s" % dt.datetime.strftime(date, "%Y%m%d"))
             continue
 
         sensorCode = os.path.basename(inFiles[0])[:3]
 
         if sensor == "Landsat":
-            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.datetime.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
         else:
-            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
+            mergedOutfile = os.path.join(path_indices, index, sensorCode + "_" + dt.datetime.strftime(date, "%Y%m%d") + "_" + index + ".vrt")
 
         try:
             rsu.createVRT(inFiles, mergedOutfile, separate=False)
-        except Exception, e:
+        except Exception as e:
             if not debug:
                 progress.setText("ERROR: %s" % e)
             else:
@@ -506,7 +512,6 @@ for date in uniqueDates:
 # Update progress bar
 if not debug:
     progress.setPercentage(100)
-
 
 
 

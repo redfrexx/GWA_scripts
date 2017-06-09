@@ -10,7 +10,7 @@ LazyData: true
 RoxygenNote: 6.0.1.9000
 Author: Christina Ludwig [aut, cre]
 Maintainer: Christina Ludwig <ludwig@geoville.com>
-Built: R 3.3.2; ; 2017-05-30 09:04:29 UTC; windows
+Built: R 3.3.2; ; 2017-06-02 09:52:59 UTC; windows
 RemoteType: local
 RemoteUrl: O:\2687_GW_A\04_CODE\R\GWAutils
 RemoteSha: 0.0.0.9000

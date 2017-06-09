@@ -7,11 +7,11 @@
 # 
 # 
 # Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+ __version__ = "1.0"
 
 
 ##Filter SAR water and wetness frequencies=name
@@ -19,19 +19,21 @@
 ##ParameterFile|inDir|Directory containing SAR based water and wetness frequencies|True|False
 ##ParameterBoolean|water|Filter water frequencies
 ##ParameterBoolean|wetness|Filter wetness frequencies
-##OutputDirectory|outDir|Output directory
+##OutputDirectory|path_output|Output directory
 debug = False
+
 
 # -> Test Parameteres
 if debug:
-    inDir = r"T:\Processing\2687_GW_A\02_Interim_Products\SAR\site_98\EQUI7_AF010M"
-    outDir = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts"
+    inDir = r""
+    path_output = r""
     water = True
     wetness = False
 
 from osgeo import gdal
 import os
 import fnmatch
+import time
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
@@ -62,13 +64,13 @@ if not os.path.exists(inDir):
         sys.exit(1)
 
 # Output path
-if not os.path.exists(outDir):
+if not os.path.exists(path_output):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameter: 'Output directory' does not exist.")
         sys.exit(1)
 
 # Create output directory
-outDirFiltered = os.path.join(outDir, "SAR_filtered")
+outDirFiltered = os.path.join(path_output, "SAR_filtered")
 if not os.path.exists(outDirFiltered):
     os.mkdir(outDirFiltered)
 
@@ -84,8 +86,7 @@ for root, dirs, files in os.walk(inDir):
 if len(SARfiles) == 0:
     if not debug:
         raise GeoAlgorithmExecutionException("Runtime Error: No SAR files found.")
-        sys.exit(1)
-    
+
 for i,inFile in enumerate(SARfiles):
     print("Processing %s of %s files" % (i+1, len(SARfiles)))
 

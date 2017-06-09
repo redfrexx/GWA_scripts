@@ -6,18 +6,18 @@
 # licensing by GeoVille GmbH.
 # 
 # 
-# Date created: 06.05.2017
-# Date last modified: 09.05.2017
+# Date created: 09.06.2017
+# Date last modified: 09.06.2017
 # 
 # 
-# __author__ = "Christina Ludwig"
-# __version__ = "1.0"
+__author__ = "Christina Ludwig"
+__version__ = "1.0"
 
 ##Water Cycle Regime Classfication = name
 ##Water Cycle Regime=group
 
 ##ParameterFile|pathIN|Directory containing water masks|True|False
-##OutputDirectory|pathOUT|Output directory
+##OutputDirectory|path_output|Output directory
 ##ParameterBoolean|exportSeasonalFrequencies|Export seasonal water frequencies
 ##*ParameterString|startDate|Start date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
 ##*ParameterString|endDate|End date (YYYYMMDD) - if left empty all available scenes will be used||False|True|True
@@ -30,12 +30,12 @@ debug = False
 
 # test paths
 if debug:
-    pathIN = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
-    pathOUT = r"I:\2687_GW_A\02_Interim_Products\Toolbox\02_InterimProducts\test_S2\SE_waterMasks_wat450_win1800_mmu3"
+    pathIN = r""
+    path_output = r""
     exportSeasonalFrequencies = True
-    startDate = "20170101"
-    endDate = "20171231"
-    spring = False
+    startDate = ""
+    endDate = ""
+    spring = True
     summer = True
     fall = True
     winter = True
@@ -44,12 +44,13 @@ if debug:
 import os, sys
 import numpy as np
 import fnmatch
-from matplotlib import pyplot as plt
 import gdal
 from shutil import copyfile
-from os.path import expanduser
 import datetime as dt
 import time
+from processing.tools import dataobjects
+
+starttime = time.time()
 
 if not debug:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
@@ -104,13 +105,13 @@ if not os.path.exists(pathIN):
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Directory containing water masks' does not exist.")
     print("Invalid input parameters: 'Directory containing water masks' does not exist.")
 
-if not os.path.exists(pathOUT):
+if not os.path.exists(path_output):
     if not debug:
         raise GeoAlgorithmExecutionException("Invalid input parameters: 'Output directory' does not exist.")
     print("Invalid input parameters: 'Output directory' does not exist.")
 
 
-pathOUT_class = os.path.join(pathOUT,"classification_WCR")
+pathOUT_class = os.path.join(path_output, "classification_WCR")
 if not os.path.exists(pathOUT_class):
     os.mkdir(pathOUT_class)
 
@@ -120,7 +121,8 @@ if exportSeasonalFrequencies:
     if not os.path.exists(pathOUT_freqs):
         os.mkdir(pathOUT_freqs)
 
-progress.setText(pathOUT_class)
+if not debug:
+    progress.setText(pathOUT_class)
 
 # Check start and end dates ---------------------------------------------------------------------------------------------------------------------------------
 if startDate == "":
@@ -141,7 +143,7 @@ else:
         if not debug:
             raise GeoAlgorithmExecutionException("Invalid input parameter: Format of 'End date' is not valid.")
 
-if endDate < startDate:
+if endDate is not None and startDate is not None and endDate < startDate:
     raise GeoAlgorithmExecutionException("Invalid input parameters: 'Start date'  must be earlier than 'End date'.")
 
 
@@ -201,14 +203,13 @@ for season in seasons:
         outfile_name = os.path.join(pathOUT_freqs, os.path.basename(dest) + '.qml')
         copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
+validPixels = np.array(validPixels)
+validObs = np.nansum(validPixels, axis=0)
 
 waterFreqs = np.array(waterFreqs)
 waterFreq_all = np.nansum(waterFreqs, axis=0) / np.nansum(validPixels != 0, axis=0)
 
 del waterFreqs
-
-validPixels = np.array(validPixels)
-validObs = np.nansum(validPixels, axis=0)
 
 waterFreq_all = np.where(validObs == 0, np.nan, waterFreq_all)
 
@@ -232,7 +233,6 @@ classification = np.where(waterFreq_all >= 80, 1, classification)
 # Temporary Water
 classification = np.where((waterFreq_all < 80) & (waterFreq_all >= 25), 2, classification)
 
-
 # Export maps to file ===============================================================================
 
 # WATER FREQUENCY
@@ -249,6 +249,7 @@ rsu.array2raster(waterFreq_all, geotrans, proj, dest, gdal.GDT_Float32, -9999)
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
+dataobjects.load(dest, os.path.basename(dest))
 
 # CLASSIFICATION
 
@@ -276,4 +277,6 @@ rsu.array2raster(classification, geotrans, proj, dest, gdal.GDT_Byte, 255)
 outfile_name = os.path.join(pathOUT_class, file_name+'.qml')
 copyfile(os.path.join(qmlDir, "classification_water.qml"), outfile_name)
 
+dataobjects.load(dest, os.path.basename(dest))
 
+progress.setConsoleInfo('Classification successful!')
