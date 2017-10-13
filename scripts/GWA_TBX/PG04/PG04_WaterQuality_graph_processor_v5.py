@@ -29,15 +29,13 @@ param3 = "WaterQualityParameters03.txt"
 param4 = "WaterQualityParameters04.txt"
 param5 = "WaterQualityParameters05.txt"
 param6 = "WaterQualityParameters06.txt"
-param7 = "WaterQualityParameters07.txt"
-param8 = "WaterQualityParameters08.txt"
 
 def folder_check(tempfolder):
     try:
         tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0]
         return False
     except IndexError:
-        progress.setConsoleInfo('ERROR: Parameter folder could not be found. Please execute steps 1-9 first!')
+        progress.setConsoleInfo('ERROR: Parameter folder could not be found. Please execute steps 1-7 first!')
         return True
         
 def folder_create(tempfolder):
@@ -190,9 +188,7 @@ def create_graph(tempdir):
         text_file.write('      </sources>\n') 
         text_file.write('      <parameters>\n') 
         text_file.write('        <owtType>${L2WowtType}</owtType>\n') 
-        text_file.write('        <reflectancesPrefix>${OWTreflectancesPrefix}</reflectancesPrefix>\n') 
         text_file.write('        <inputReflectanceIs>${l2RReflectAs}</inputReflectanceIs>\n') 
-        text_file.write('        <writeInputReflectances>${OWTwriteInputReflectances}</writeInputReflectances>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
         
@@ -442,8 +438,8 @@ def create_graph(tempdir):
     gpt_script = tempdir + "ProcessingGraph.xml"
     return gpt_script 
 
-def param_check(tempdir, param0, param1, param2, param3, param4, param5, param6, param7, param8):
-    if os.path.isfile(tempdir + param0) & os.path.isfile(tempdir + param1) & os.path.isfile(tempdir + param2) & os.path.isfile(tempdir + param3) & os.path.isfile(tempdir + param4) & os.path.isfile(tempdir + param5) & os.path.isfile(tempdir + param6) & os.path.isfile(tempdir + param7) & os.path.isfile(tempdir + param8):
+def param_check(tempdir, param0, param1, param2, param3, param4, param5, param6):
+    if os.path.isfile(tempdir + param0) & os.path.isfile(tempdir + param1) & os.path.isfile(tempdir + param2) & os.path.isfile(tempdir + param3) & os.path.isfile(tempdir + param4) & os.path.isfile(tempdir + param5) & os.path.isfile(tempdir + param6) :
         return True
     else:
         if not os.path.isfile(tempdir + param0):
@@ -460,14 +456,10 @@ def param_check(tempdir, param0, param1, param2, param3, param4, param5, param6,
             progress.setConsoleInfo('ERROR: Parameter file 4 missing. Please execute step 1-6 first!')
         if not os.path.isfile(tempdir + param6):
             progress.setConsoleInfo('ERROR: Parameter file 4 missing. Please execute step 1-7 first!')
-        if not os.path.isfile(tempdir + param7):
-            progress.setConsoleInfo('ERROR: Parameter file 4 missing. Please execute step 1-8 first!')
-        if not os.path.isfile(tempdir + param8):
-            progress.setConsoleInfo('ERROR: Parameter file 4 missing. Please execute step 1-9 first!')
         return False
 
-def concat_param(tempdir, param0, param1, param2, param3, param4, param5, param6, param7, param8):
-    filenames = [tempdir + param0, tempdir + param1, tempdir + param2, tempdir + param3, tempdir + param4, tempdir + param5, tempdir + param6, tempdir + param7, tempdir + param8]
+def concat_param(tempdir, param0, param1, param2, param3, param4, param5, param6):
+    filenames = [tempdir + param0, tempdir + param1, tempdir + param2, tempdir + param3, tempdir + param4, tempdir + param5, tempdir + param6]
     paramfile = tempdir + 'params.properties'
     with open(paramfile, 'w') as outfile:
         for fname in filenames:
@@ -500,7 +492,7 @@ def processing(tempdir, Output_folder, input_files_list, beam_path, gpt_script, 
             progress.setText(line)
     #os.remove(gpt_script)
  
-def execution(tempfolder, Output_folder, input_files_list, beam_path, param0, param1, param2, param3, param4, param5, param6, param7, param8):
+def execution(tempfolder, Output_folder, input_files_list, beam_path, param0, param1, param2, param3, param4, param5, param6):
     if input_files == "":
         progress.setText('ERROR: Input folder not defined!')
         return
@@ -509,16 +501,16 @@ def execution(tempfolder, Output_folder, input_files_list, beam_path, param0, pa
         return
     elif folder_check(tempfolder):
         return
-    elif not param_check(glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0] + "/", param0, param1, param2, param3, param4, param5, param6, param7, param8):
+    elif not param_check(glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0] + "/", param0, param1, param2, param3, param4, param5, param6):
         return
     else:
         tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0]
         tempdir = tempdir.replace("\\", "/") + "/"
         gpt_script = create_graph(tempdir)
-        param_results = param_check(tempdir, param0, param1, param2, param3, param4, param5, param6, param7, param8)
+        param_results = param_check(tempdir, param0, param1, param2, param3, param4, param5, param6)
         if param_results:
-            paramfile= concat_param(tempdir, param0, param1, param2, param3, param4, param5, param6, param7, param8)
+            paramfile= concat_param(tempdir, param0, param1, param2, param3, param4, param5, param6)
         processing(tempdir, Output_folder, input_files_list, beam_path, gpt_script, paramfile)
         #shutil.rmtree(tempdir)
 
-execution(tempfolder, Output_folder, input_files_list, beam_path, param0, param1, param2, param3, param4, param5, param6, param7, param8)
+execution(tempfolder, Output_folder, input_files_list, beam_path, param0, param1, param2, param3, param4, param5, param6)

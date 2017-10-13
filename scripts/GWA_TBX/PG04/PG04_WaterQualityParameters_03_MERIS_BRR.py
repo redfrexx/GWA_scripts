@@ -7,6 +7,11 @@
 ##ParameterBoolean|OutputToar|Output TOA|false
 ##ParameterSelection|CorrectionSurface|Correction Surface|ALL_SURFACES; LAND; WATER
 
+TiePoints=True
+L1Flags=True
+OutputToar=False
+CorrectionSurface='ALL_SURFACES'
+
 import os
 import glob
 import tempfile

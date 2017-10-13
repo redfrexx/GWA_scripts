@@ -1,7 +1,7 @@
 #Definition of inputs and outputs
 #==================================
 ##BC=group
-##PG04_WaterQualityParameters_CRS_select=name
+##PG04_WaterQualityParameters_04_OLCI_CRS_select=name
 ##Define_output_CRS=crs
 
 
@@ -20,7 +20,7 @@ def folder_check(tempfolder):
         return True
 
 def create_parameterfile(tempdir, Define_output_CRS):
-    with open(tempdir + "WaterQualityParameters06.txt", "w") as text_file:
+    with open(tempdir + "WaterQualityParametersOLCI04.txt", "w") as text_file:
         text_file.write('crs='+ Define_output_CRS + '\n')
 
 def execution(tempfolder):
