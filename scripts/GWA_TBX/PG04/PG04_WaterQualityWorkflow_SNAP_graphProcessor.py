@@ -589,7 +589,7 @@ def processing(tempdir, Output_folder, input_files_list, snap_path, gpt_script, 
     for n in range(0, len(input_files_list)):
         inputfile = input_files_list[n]
         filename = inputfile.split("/")[len(inputfile.split("/")) - 1]
-        cmnd = 'gpt -c '  + str(mem) + 'G -Dsnap.log.level=DEBUG "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-5] + '"'
+        cmnd = '"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G -Dsnap.log.level=DEBUG "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-5] + '"'
         progress.setText('"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G -Dsnap.log.level=DEBUG "' ) 
         progress.setText(gpt_script + '"' + ' -p "' + paramfile + '" ')
         progress.setText(' -PsourceFile="' + inputfile )
