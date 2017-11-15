@@ -58,8 +58,8 @@ rp.control.dispose(panel)
 class_ints <- names(frq)
 
 
-mess_text <- paste0('IMPORTANT: "No Data" values must not be included below.\n\nNumber of classes detected = 3\nWith raster class values of =', (paste(class_ints, collapse=", ")),
-'\n\nIs this as you expect?\n\nIf this is correct, choose Yes to continue.\nIf there are unwanted classes included above, choose No')
+mess_text <- paste0('IMPORTANT: "No Data" values must not be included below.\n\nNumber of classes detected = ', length(class_ints), '\nWith raster class values of =', (paste(class_ints, collapse=", ")),
+'\n\nIs this as you expect?\n\nIf this is correct, choose Yes to continue.\nIf there are unwanted classes or No Data values included above, choose No')
 
 class_answer <- tk_messageBox(type = 'yesno',
 message = mess_text, caption = "Map classes check. . .")
