@@ -1,0 +1,3 @@
+[submodule "rlibs"]
+	path = rlibs
+	url = https://github.com/TIGER-NET/WOIS_rlibs.git
