@@ -32,11 +32,11 @@ ndvi<-stack(ndvi)
 
 #calculate statistics of multi-temporal NDVI
 stats<-stack()
-if(Mean) stats$mean=calc(ndvi,mean)
-if(Maximum) stats$max=calc(ndvi,max)
-if(Minimum) stats$min=calc(ndvi,min)
-if(Range) stats$range=max(ndvi)-min(ndvi)
-if(StandardDeviation) stats$std=calc(ndvi, sd)
+if(Mean) stats$mean=calc(ndvi,mean, na.rm=TRUE)
+if(Maximum) stats$max=calc(ndvi,max, na.rm=TRUE)
+if(Minimum) stats$min=calc(ndvi,min, na.rm=TRUE)
+if(Range) stats$range=max(ndvi, na.rm=TRUE)-min(ndvi, na.rm=TRUE)
+if(StandardDeviation) stats$std=calc(ndvi, sd, na.rm=TRUE)
 
 #stats<-round(stats)
 stats[]=as.integer(stats[])
