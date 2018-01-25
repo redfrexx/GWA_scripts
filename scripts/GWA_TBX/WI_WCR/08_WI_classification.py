@@ -130,9 +130,15 @@ if end_date < start_date:
 # =========================================================
 
 # Search water masks
-watermask_files = [os.path.join(path_masks, f) for f in fnmatch.filter(os.listdir(path_masks), "*_water_mask.tif")]
-if not watermask_files:
-    watermask_files = [os.path.join(path_masks, f) for f in fnmatch.filter(os.listdir(path_masks), "*_water_mask_sar.tif")]
+watermask_files = []
+for f in fnmatch.filter(os.listdir(path_masks), "*_water_mask.tif"):
+    f_path = os.path.join(path_masks, f)
+    # check if sar fused water mask exists. if yes use that one instead.
+    f_path_sar = os.path.join(path_masks, f[:-4] + "_sar.tif")
+    if os.path.exists(f_path_sar):
+        watermask_files.append(f_path_sar)
+    else:
+        watermask_files.append(f_path)
 
 # Check whether masks exist
 if len(watermask_files) == 0:
@@ -144,11 +150,11 @@ else:
     print ("Found " + str(len(watermask_files)) + " water mask files.\n")
     if not DEBUG:
         progress.setText("Found " + str(len(watermask_files)) + " water mask files.\n")
+        progress.setText("\n".join(watermask_files))
 
 # Get joint extent of all watermasks
 joint_extent = rsu.getJointExtent(watermask_files)
 geotrans, proj = rsu.raster2array(watermask_files[0], joint_extent)[1:3]
-
 
 # CALCULATE WATER FREQUENCY ----------------------------------------------------------------------------------------
 
@@ -196,7 +202,6 @@ soil_masks = []
 
 for wm_file in watermask_files:
 
-
     # Extract date of water mask from file name
     dateidx = wm_file.find("_d") + 2
     watermask_date = dt.datetime.strptime(wm_file[dateidx:dateidx + 8], "%Y%m%d")
@@ -208,6 +213,7 @@ for wm_file in watermask_files:
         # Dense vegetation wetness
         dveg_files = [os.path.join(path_masks, f) for f in
                       fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_dveg_mask.tif")]
+
         if dveg_files:
             jointExt = rsu.getJointExtent(dveg_files[0], AOIextent=joint_extent)
             dveg_mask, geotrans_dveg = rsu.raster2array(dveg_files[0], jointExt)[:2]
@@ -233,7 +239,11 @@ for wm_file in watermask_files:
 
         # Bare soil wetness
         soil_files = [os.path.join(path_masks, f) for f in
-                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_soil_mask.tif")]
+                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_soil_mask_sar.tif")]
+        if not soil_files:
+            soil_files = [os.path.join(path_masks, f) for f in
+                          fnmatch.filter(os.listdir(path_masks),
+                                         "*_d" + wm_file[dateidx:dateidx + 8] + "*_soil_mask.tif")]
         if soil_files:
             jointExt = rsu.getJointExtent(soil_files[0], AOIextent=joint_extent)
             soil_mask, geotrans_soil = rsu.raster2array(soil_files[0], jointExt)[:2]
@@ -404,9 +414,6 @@ if res != True:
 # Legend file
 outfile_name = os.path.join(path_output_classification, file_name + '.qml')
 copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
-
-
-
 
 # Classification
 file_name = title + "_wetland_probability"

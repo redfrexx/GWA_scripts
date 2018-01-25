@@ -725,7 +725,7 @@ def array2raster(array, trans, proj, dest, dataType, nodataVal):
         bandCols = array.shape[2]
         bandRows = array.shape[1]
     else:
-        print "Too many dimensions."
+        print("Too many dimensions.")
         return 1
 
     # Check if file exists, delete it if it does
