@@ -1,11 +1,11 @@
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
-<qgis version="2.18.0" minimumScale="inf" maximumScale="1e+08" hasScaleBasedVisibilityFlag="0">
+<qgis version="2.18.8" minimumScale="inf" maximumScale="1e+08" hasScaleBasedVisibilityFlag="0">
   <pipe>
-    <rasterrenderer opacity="1" alphaBand="0" classificationMax="0" classificationMinMaxOrigin="CumulativeCutFullExtentEstimated" band="1" classificationMin="0" type="singlebandpseudocolor">
+    <rasterrenderer opacity="1" alphaBand="-1" classificationMax="0" classificationMinMaxOrigin="CumulativeCutFullExtentEstimated" band="1" classificationMin="0" type="singlebandpseudocolor">
       <rasterTransparency/>
       <rastershader>
         <colorrampshader colorRampType="EXACT" clip="0">
-          <item alpha="255" value="1" label="1" color="#38acff"/>
+          <item alpha="255" value="1" label="Maximum water extent" color="#38acff"/>
         </colorrampshader>
       </rastershader>
     </rasterrenderer>

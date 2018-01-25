@@ -36,17 +36,10 @@ from scipy import ndimage
 from osgeo import gdal
 
 # Load additional library
-here = os.path.dirname(scriptDescriptionFile)
-pyDir = os.path.join(here, 'data', 'python')
-if pyDir not in sys.path:
-    sys.path.append(pyDir)
-
-
 import RSutils.RSutils as rsu
 
 
-#path_TWI = "I:/temp/TWI/TWI.tif"
-
+path_TWI = r"I:/temp/GWA_TBX_SE/TWI.tif"
 out_dir = os.path.dirname(path_TWI)
 print out_dir
 
@@ -62,10 +55,11 @@ if not os.path.exists(outfile_binary):
     print "Creating binary mask ..."
 
     # Median filter
-    #TWI, geotrans, proj = rsu.raster2array(path_TWI)
-    #TWI_smooth = ndimage.median_filter(TWI, size=7) * 1000
-    #dest = os.path.join(out_dir, "TWI.tif")
-    #rsu.array2raster(TWI_smooth, geotrans, proj, dest, gdal.GDT_Int16, -9999)
+    TWI, geotrans, proj = rsu.raster2array(path_TWI)
+    TWI_smooth = ndimage.median_filter(TWI, size=7) * 1000
+    dest = os.path.join(out_dir, "TWI2.tif")
+    rsu.array2raster(TWI_smooth, geotrans, proj, dest, gdal.GDT_Int16, -9999)
+    path_TWI = dest
 
     # Read TWI file
     TWI_file = gdal.Open(path_TWI)
