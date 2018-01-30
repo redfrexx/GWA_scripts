@@ -3,8 +3,10 @@
 ##BC=group
 ##PG04_WaterQualityParameters_CoastColour_L2W=name
 ##ParameterString|invalidPixelExpression|Invalid pixel expression|l2r_flags.INPUT_INVALID
-##ParameterBoolean|outputAOT550|write AOT 550|false
+#ParameterBoolean|outputAOT550|write AOT 550|false
 ##ParameterSelection|owtType|Select OWT type|INLAND; COASTAL; INLAND_NO_BLUE_BAND; GLASS_5C; GLASS_6C, GLASS_6C_NORMALIZED 
+
+outputAOT550=False
 
 import os
 import glob
@@ -36,7 +38,7 @@ def convert(owtType):
     return owtTypeS
 
 def create_parameterfile(tempdir, invalidPixelExpression, outputAOT550, owtTypeS):
-    with open(tempdir + "WaterQualityParameters06.txt", "w") as text_file:
+    with open(tempdir + "WaterQualityParameters05.txt", "w") as text_file:
         text_file.write('L2WinvalidPixelExpression='+ invalidPixelExpression + '\n')
         text_file.write('L2WoutputAOT550='+ str(outputAOT550).lower() + '\n') 
         text_file.write('L2WowtType='+ owtTypeS + '\n')

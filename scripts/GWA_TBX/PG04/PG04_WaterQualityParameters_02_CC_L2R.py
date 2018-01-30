@@ -2,10 +2,10 @@
 #==================================
 ##BC=group
 ##PG04_WaterQualityParameters_CoastColour_L2R=name
-##ParameterBoolean|SnTMap|Use SnT map|false
+#ParameterBoolean|SnTMap|Use SnT map|false
 ##ParameterNumber|AverageSalinity|Average Salinity|0|None|1.0
 ##ParameterNumber|AverageTemperature|Average Temperature|0|None|15.0
-##ParameterBoolean|ExtremeCaseMode|Use extreme case mode|true
+##ParameterBoolean|ExtremeCaseMode|Use extreme case mode|false
 ##ParameterString|LandExpression|Land expression|l1p_flags.CC_LAND
 ##ParameterString|SnowIceExpression|Snow ice expression|l1p_flags.CC_CLOUD or l1p_flags.CC_SNOW_ICE
 ##ParameterBoolean|L2RToa|Calculate L2R TOA|false
@@ -16,6 +16,7 @@ import glob
 import tempfile
 
 tempfolder = 'wq_scripts_'
+SnTMap = False
 
 def folder_check(tempfolder):
     try:
