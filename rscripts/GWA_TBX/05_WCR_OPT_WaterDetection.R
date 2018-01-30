@@ -37,10 +37,10 @@ start_time <- proc.time()
 if (DEBUG) {
   .libPaths("C:\\Users\\ludwig\\.qgis2\\processing\\rlibs")
   #.libPaths("C:\\Users\\ludwig\\Documents\\R\\win-library\\3.2")
-  Directory_containing_indices= "I:\\temp\\GWA_TBX_test\\indices"
-  Directory_containing_TWI= "I:\\2687_GW_A\\Toolbox\\02_InterimProducts\\TWI"
-  Output_Directory="I:\\temp\\GWA_TBX_test"
-  Minimum_water_probability = 44
+  Directory_containing_indices= "I:\\WI\\02_InterimProducts\\WI_test\\step3_indices"
+  Directory_containing_TWI= "I:\\WI\\02_InterimProducts\\example_site\\step05_TWI"
+  Output_Directory="I:\\WI\\02_InterimProducts\\WI_test"
+  Minimum_water_probability = 46
   Start_Date <- " "
   End_Date <- " "
   Minimum_mapping_unit = 3
