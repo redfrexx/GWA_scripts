@@ -39,9 +39,9 @@ from osgeo import gdal
 import RSutils.RSutils as rsu
 
 
-path_TWI = r"I:/temp/GWA_TBX_SE/TWI.tif"
-out_dir = os.path.dirname(path_TWI)
-print out_dir
+#path_TWI = r"I:\WI\01_Raw\DEM_TBX_SAGA\full_tile\dem_clippedSAGA.tif"
+#out_dir = os.path.dirname(path_TWI)
+#print out_dir
 
 attrName = None
 attrVal = None
