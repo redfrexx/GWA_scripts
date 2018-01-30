@@ -6,8 +6,7 @@
 # licensing by GeoVille GmbH.
 
 """
-Support functions and classes for raster handling
-
+Support functions and classes for handling of remote sensing images
 Date created: 09/06/2016
 Date last modified: 09/06/2017
 
@@ -154,21 +153,19 @@ class Scene(object):
 
     def calcCloudCoverage(self, AOIextent=None):
 
-        if self.cloudy is None:
+        if not os.path.exists(self.fmask):
+            return 1
 
-            if not os.path.exists(self.fmask):
-                return 1
+        fmask = None
+        fmask = raster2array(self.fmask, self.extent)[0]
 
-            fmask = None
-            fmask = raster2array(self.fmask, self.extent)[0]
+        nonNANpixels = np.nansum(np.where(np.isnan(fmask), 0, 1))
 
-            nonNANpixels = np.nansum(np.where(np.isnan(fmask), 0, 1))
+        # Mask out 2 - clouds, 3 - shadow and 4 - snow
+        mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4), 1, 0)
 
-            # Mask out 2 - clouds, 3 - shadow and 4 - snow
-            mask = np.where((fmask == 2) | (fmask == 3) | (fmask == 4), 1, 0)
-
-            # Compute cloud coverate
-            self.cloudy = 100. - (float(np.nansum(mask == 0)) / nonNANpixels) * 100.
+        # Compute cloud coverate
+        self.cloudy = 100. - (float(np.nansum(mask == 0)) / nonNANpixels) * 100.
 
 class SentinelScene(Scene):
     """Class to handle Sentinel-2 scenes 
@@ -262,12 +259,9 @@ class SentinelScene(Scene):
             self.cloudy = [float(child.text) for child in rootElement.iter("CLOUDY_PIXEL_PERCENTAGE")][0]
             self.degraded = [float(child.text) for child in rootElement.iter("DEGRADED_MSI_DATA_PERCENTAGE")][0]
             self.date = dt.strptime(datestring[:10], "%Y-%m-%d")
-
-            # Get IDs
-            if self.ID is None:
-                self.ID = [child.text for child in rootElement.iter("TILE_ID")][0]
-                tileIDindex = self.ID.rfind("_T")+1
-                self.tileID = self.ID[tileIDindex:tileIDindex+6]
+            self.ID = [child.text for child in rootElement.iter("TILE_ID")][0]
+            tileIDindex = self.ID.rfind("_T") + 1
+            self.tileID = self.ID[tileIDindex:tileIDindex + 6]
 
             metaF.close()
 
@@ -322,7 +316,6 @@ class SentinelScene(Scene):
             else:
                 self.fmask = ""
 
-
     def getBand(self, bandNo=1, masked=True, extent=None):
         """Get specified band of scene as numpy array.
         
@@ -338,7 +331,7 @@ class SentinelScene(Scene):
         BandNo 10: SWIR2 (12)
         """
 
-        if extent == None:
+        if extent is None:
             extent = self.extent
 
         band = raster2array(self.files[bandNo-1], extent)[0]
@@ -367,10 +360,10 @@ class LandsatScene(Scene):
         Scene.__init__(self, sceneDir, tempDir, extentAOI)
 
         # Get files of spectral bands
-        self.ID = os.path.basename(sceneDir)[:16]
-        self.tileID = self.ID[3:9]
-        self.date = dt.strptime(self.ID[9:16], "%Y%j")
-        self.sensor = self.ID[2]
+        self.ID = os.path.basename(sceneDir)[:25]
+        self.tileID = self.ID[10:16]
+        self.date = dt.strptime(self.ID[17:25], "%Y%m%d")
+        self.sensor = self.ID[3]
         self.sensorCode = "LS" + self.sensor
 
         self.getFiles()
@@ -458,7 +451,7 @@ class LandsatScene(Scene):
 
         return band
 
-class extent(object):
+class Extent(object):
 
     def __init__(self, ulX, ulY, ncol=None, nrow=None, pixSize=None, proj=None, lrX=None, lrY=None):
         self.ulX = ulX
@@ -527,6 +520,14 @@ class extent(object):
 
         poly = self.get_as_polygon()
 
+        # Delete shapefile if it already exists
+        try:
+            if os.path.exists(os.path.join(shp_path, shp_name+".shp")):
+                map(os.unlink, glob.glob(os.path.join(shp_path, shp_name + '.*')))
+        except Exception:
+            return ("%s already exists and cannot be deleted. \n Close the file and run alorithm again."
+                    % os.path.join(shp_path, shp_name + ".shp"))
+
         # Now convert it to a shapefile with OGR
         driver = ogr.GetDriverByName('Esri Shapefile')
         ds = driver.CreateDataSource(shp_path)
@@ -548,6 +549,8 @@ class extent(object):
 
         # Save and close everything
         ds = layer = feat = geom = None
+
+        return True
 
 
 
@@ -611,7 +614,7 @@ def binaryBuffer_negative(binary_img, size=1):
     buffered_img = np.logical_not(ndimage.morphology.binary_dilation(np.logical_not(binary_img), iterations=size, structure=struct2))
     return np.where(np.isnan(binary_img), np.nan, buffered_img )
 
-def raster2array(rasterPath, AOIExtent=None, bandNo=1):
+def raster2array(rasterPath, AOI_extent=None, bandNo=1):
     """ Load and clip band from raster
     Load a band from a raster image and clip it to extent of shapefile
 
@@ -619,9 +622,6 @@ def raster2array(rasterPath, AOIExtent=None, bandNo=1):
 
     :rtype: object: ndarray, newGeoTrans
     """
-
-
-    #todo check if raster and rasterExtent have same projection
 
     # Open file
     try:
@@ -641,20 +641,20 @@ def raster2array(rasterPath, AOIExtent=None, bandNo=1):
     sourceProj.ImportFromWkt(proj)
     pixSize = geoTrans[1]
 
-    if AOIExtent:
+    if AOI_extent:
 
-        if AOIExtent.proj != sourceProj:
-            ext_ulX, ext_ulY = reprojectPoint(AOIExtent.proj, sourceProj, AOIExtent.ulX, AOIExtent.ulY)
-            ext_lrX, ext_lrY = reprojectPoint(AOIExtent.proj, sourceProj, AOIExtent.lrX, AOIExtent.lrY)
+        AOIProj = osr.SpatialReference()
+        AOIProj.ImportFromWkt(AOI_extent.proj.ExportToWkt())
+        if not AOIProj.IsSame(sourceProj):
+            ext_ulX, ext_ulY = reprojectPoint(AOIProj, sourceProj, AOI_extent.ulX, AOI_extent.ulY)
+            ext_lrX, ext_lrY = reprojectPoint(AOIProj, sourceProj, AOI_extent.lrX, AOI_extent.lrY)
         else:
-            ext_ulX = AOIExtent.ulX
-            ext_ulY = AOIExtent.ulY
-            ext_lrX = AOIExtent.lrX
-            ext_lrY = AOIExtent.lrY
+            ext_ulX = AOI_extent.ulX
+            ext_ulY = AOI_extent.ulY
+            ext_lrX = AOI_extent.lrX
+            ext_lrY = AOI_extent.lrY
 
-        ext_ncol = AOIExtent.ncol
-        ext_nrow = AOIExtent.nrow
-        ext_pixSize = AOIExtent.pixSize
+        ext_pixSize = AOI_extent.pixSize
 
         # LR coordinates of raster
         lrX = geoTrans[0] + rasterF.RasterXSize * pixSize
@@ -665,7 +665,6 @@ def raster2array(rasterPath, AOIExtent=None, bandNo=1):
 
         # Check if extent is valid
         if (ras_ulY < 0) or (ras_ulX < 0) or (lrX < ext_lrX) or (lrY > ext_lrY):
-            logging.warning("Requested invalid extent for raster file %s." % rasterPath)
             raise ValueError("Requested invalid extent for raster file %s." % rasterPath)
 
         # Number of cols and rows
@@ -675,6 +674,7 @@ def raster2array(rasterPath, AOIExtent=None, bandNo=1):
         # Import clip extent from raster file
         band = rasterF.GetRasterBand(bandNo).ReadAsArray(ras_ulX, ras_ulY, ncol, nrow)
 
+        # Resample if pixel size of image and given extent are not the same
         if ext_pixSize < pixSize:
             zoom = pixSize / ext_pixSize
             band = ndimage.zoom(band, zoom, order=0)
@@ -725,12 +725,15 @@ def array2raster(array, trans, proj, dest, dataType, nodataVal):
         bandCols = array.shape[2]
         bandRows = array.shape[1]
     else:
-        print "Too many dimensions."
-        return -1
+        print("Too many dimensions.")
+        return 1
 
     # Check if file exists, delete it if it does
-    if os.path.exists(dest):
-         os.remove(dest)
+    try:
+        if os.path.exists(dest):
+            os.remove(dest)
+    except Exception:
+        return("%s already exists and cannot be deleted. \n Close the file and run alorithm again." % dest)
 
     outdriver = gdal.GetDriverByName("GTIFF")
 
@@ -838,7 +841,10 @@ def reprojectPoint(sourceProj, targetProj, xCoord, yCoord):
 
     point.Transform(transform)
 
-    return round(point.GetX()), round(point.GetY())
+    if targetProj.IsGeographic():
+        return (point.GetX(), point.GetY())
+    else:
+        return round(point.GetX()), round(point.GetY())
 
 def padArray(array, geoTransOfArray, projArray, AOIextent):
 
@@ -931,7 +937,7 @@ def intersectRasterExtents(extent1, extent2):
     if ncol <= 0 or nrow <= 0:
         return None
     else:
-        return extent( ulX, ulY, int(ncol), int(nrow), pixSize, extent1.proj, lrX, lrY )
+        return Extent(ulX, ulY, int(ncol), int(nrow), pixSize, extent1.proj, lrX, lrY)
 
 def getJointExtent(rasterPaths, shapePath="", attributeName=None, attributeValue=None, AOIextent=None, buffer=None):
     """ Get overlapping extent of input files. Input files must all have the same resolution. If calculating the joint extent
@@ -1009,7 +1015,7 @@ def getJointExtent(rasterPaths, shapePath="", attributeName=None, attributeValue
     if ncol <= 0 or nrow <= 0:
         return None
     else:
-        return extent(ulX, ulY, int(ncol), int(nrow), pixSize, projRaster, lrX, lrY)
+        return Extent(ulX, ulY, int(ncol), int(nrow), pixSize, projRaster, lrX, lrY)
 
 def convertShapeExtentToRasterExtent(shapePath, rasterPath, attributeName=None, attributeValue=None, buffer=None):
     """ Convert extent taken from a shapefile (feature or shapefile extent) to coordinates of a reference raster file.
@@ -1092,7 +1098,7 @@ def convertShapeExtentToRasterExtent(shapePath, rasterPath, attributeName=None, 
             # todo: raise ValueError, delete return None
             return None
         else:
-            return extent(ulX, ulY, int(ncol), int(nrow), pixSize, projRaster, lrX, lrY)
+            return Extent(ulX, ulY, int(ncol), int(nrow), pixSize, projRaster, lrX, lrY)
 
 def createVRT(inFiles, outfile, AOIextent=None, separate=True):
     """Create a vrt file of several input files for specified extent. """
