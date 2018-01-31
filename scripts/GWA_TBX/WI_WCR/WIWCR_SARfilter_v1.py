@@ -1,17 +1,17 @@
 #  Copyright (c) 2017, GeoVille Information Systems GmbH
 #  All rights reserved.
-# 
+#
 #  Redistribution and use in source and binary forms, with or without
 #  modification, is prohibited for all commercial applications without
 # licensing by GeoVille GmbH.
-# 
-# 
+#
+#
 # Date created: 06.05.2017
 # Date last modified: 09.06.2017
-# 
-# 
+#
+#
 __author__ = "Christina Ludwig"
- __version__ = "1.0"
+__version__ = "1.0"
 
 
 ##Filter SAR water and wetness frequencies=name
