@@ -51,7 +51,7 @@ print out_dir
 
 attrName = None
 attrVal = None
-extentBuffer=0
+extentBuffer = 0
 
 # Create TWI binary mask ------------------------------------------------
 
@@ -74,16 +74,19 @@ nodata_TWI = TWI_file.GetRasterBand(1).GetNoDataValue()
 TWI = np.where(TWI == nodata_TWI, np.nan, TWI)
 
 # Find threshold
-TWI = (TWI-np.nanmin(TWI))/(np.nanmax(TWI)-np.nanmin(TWI))
-TWI_binary = np.where(TWI > 0.4, 0, 1)
+TWI = (TWI - np.nanmin(TWI)) / (np.nanmax(TWI) - np.nanmin(TWI))
+with np.errstate(invalid='ignore'):
+    TWI_binary = (TWI <= 0.4).astype(int)
 
-#Sieve mask
+# Sieve mask
 TWI_binary = rsu.removeNoise(TWI_binary, 2)
 TWI_binary = rsu.binaryBuffer_negative(TWI_binary, 3)
 
-#Export to file
-x = rsu.array2raster(TWI_binary, TWI_file.GetGeoTransform(), TWI_file.GetProjection(), outfile_binary, gdal.GDT_Byte, 255)
-if x == False:
+# Export to file
+x = rsu.array2raster(
+    TWI_binary, TWI_file.GetGeoTransform(),
+    TWI_file.GetProjection(), outfile_binary, gdal.GDT_Byte, 255)
+if not x:
     print("Exporting TWI mask failed.")
     raise RuntimeError("Exporting TWI mask failed.")
 
