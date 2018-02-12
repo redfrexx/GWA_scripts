@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Copyright (c) 2016, GeoVille Information Systems GmbH
 # All rights reserved.
 #
