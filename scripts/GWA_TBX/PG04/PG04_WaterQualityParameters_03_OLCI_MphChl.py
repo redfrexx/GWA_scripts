@@ -5,7 +5,7 @@
 ##ParameterString|MPHvalidPixelExpression|Valid pixel expression|not quality_flags.invalid and (not pixel_classif_flags.IDEPIX_LAND or quality_flags.fresh_inland_water) and not (pixel_classif_flags.IDEPIX_CLOUD or pixel_classif_flags.IDEPIX_CLOUD_BUFFER)
 ##ParameterNumber|MPHcyanoMaxValue|Cyano maximum value|0|None|1000.0
 ##ParameterNumber|MPHchlThreshForFloatFlag|CHL threshold for float flag|0|None|350.0
-##ParameterBoolean|MPHexportMph|Export MPH|false
+#ParameterBoolean|MPHexportMph|Export MPH|false
 
 
 import os
@@ -27,12 +27,12 @@ def convert(MPHcyanoMaxValue, MPHchlThreshForFloatFlag):
     MPHchlThreshForFloatFlagS = '%.2f' % MPHchlThreshForFloatFlag
     return MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS
 
-def create_parameterfile(tempdir, MPHvalidPixelExpression, MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS, MPHexportMph):
+def create_parameterfile(tempdir, MPHvalidPixelExpression, MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS):
     with open(tempdir + "WaterQualityParametersOLCI03.txt", "w") as text_file:
         text_file.write('mphValidExpression='+ MPHvalidPixelExpression + '\n')
         text_file.write('mphCyanoMaxValue='+ MPHcyanoMaxValueS + '\n') 
         text_file.write('mphChlThreshForFloatFlag='+ MPHchlThreshForFloatFlagS + '\n')
-        text_file.write('mphExportMph='+ str(MPHexportMph).lower() + '\n')
+        #text_file.write('mphExportMph='+ str(MPHexportMph).lower() + '\n')
 
 def execution(tempfolder):
     if folder_check(tempfolder):
@@ -40,6 +40,6 @@ def execution(tempfolder):
     else:
         tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0] + '/'
         MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS = convert(MPHcyanoMaxValue, MPHchlThreshForFloatFlag)
-        create_parameterfile(tempdir, MPHvalidPixelExpression, MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS, MPHexportMph)
+        create_parameterfile(tempdir, MPHvalidPixelExpression, MPHcyanoMaxValueS, MPHchlThreshForFloatFlagS)
 
 execution(tempfolder)

@@ -4,7 +4,7 @@
 ##PG04_WaterQualityParameters_01_OLCI_IdePix=name
 ##ParameterBoolean|CloudBuffer|Process cloud buffer|true
 ##ParameterNumber|CloudBufferWidth|lnsert size of cloud buffer in pixel|0|None|2
-##ParameterBoolean|OutputCloudProbabilityFeatureValue|Write cloud probability feature value|false
+#ParameterBoolean|OutputCloudProbabilityFeatureValue|Write cloud probability feature value|false
 
 import os
 import glob

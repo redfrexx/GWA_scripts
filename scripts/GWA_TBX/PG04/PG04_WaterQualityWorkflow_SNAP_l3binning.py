@@ -11,9 +11,9 @@
 ##ParameterString|datepref|Define character pattern before date in filename (e.g. R___ for S3A_OL_1_ERR____20161212T...)|R____
 # This returns the values 0, 1 and 2
 ##ParameterSelection|binning_type|Select binning type|period;monthly;date to date monthly
-##ParameterNumber|interval|Set binning period (in days)|0|366|10
+##ParameterNumber|interval|Set binning period (in days) - only required when using binning type "period"|0|366|10
 ##ParameterNumber|res|Set spatial resolution (km/px)|0|1000|0.6
-##ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
+#ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
 ##ParameterString|outpref|Prefix for output filenames (e.g. S3A_OL_ or MER_FRS_)|S3A_OL_
 ##Output_folder=folder
 
@@ -82,13 +82,13 @@ def create_graph(tempdir, files, rows, new_filename, sensor):
             text_file.write('              <outputCounts>false</outputCounts>\n')
             text_file.write('              <outputSums>false</outputSums>\n')
             text_file.write('          </aggregator>\n')
-            text_file.write('          <aggregator>\n')
-            text_file.write('              <type>AVG</type>\n')
-            text_file.write('              <varName>chl</varName>\n')
-            text_file.write('              <weightCoeff>0.0</weightCoeff>\n')
-            text_file.write('              <outputCounts>false</outputCounts>\n')
-            text_file.write('              <outputSums>false</outputSums>\n')
-            text_file.write('          </aggregator>\n')
+#            text_file.write('          <aggregator>\n')
+#            text_file.write('              <type>AVG</type>\n')
+#            text_file.write('              <varName>chl</varName>\n')
+#            text_file.write('              <weightCoeff>0.0</weightCoeff>\n')
+#            text_file.write('              <outputCounts>false</outputCounts>\n')
+#            text_file.write('              <outputSums>false</outputSums>\n')
+#            text_file.write('          </aggregator>\n')
             text_file.write('          <aggregator>\n')
             text_file.write('              <type>AVG</type>\n')
             text_file.write('              <varName>tsm</varName>\n')
@@ -168,15 +168,15 @@ def create_graph(tempdir, files, rows, new_filename, sensor):
     return gpt_script 
 
 
-def processing(snap_path, gpt_script, mem):
+def processing(snap_path, gpt_script):
     #Main script
     #files = []
     #for (dirpath, dirnames, filenames) in walk(input_folder):
         #files.extend(filenames)
 
-    cmnd = '"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G "' + gpt_script + '"'
-    progress.setText('"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G "' ) 
-    progress.setText(gpt_script + '"')
+    cmnd = '"' + snap_path + '/bin/gpt.exe" "' + gpt_script + '"'
+    progress.setText('"' + snap_path + '/bin/gpt.exe"' ) 
+    progress.setText( '"' + gpt_script + '"')
     si = subprocess.STARTUPINFO()
     si.dwFlags |= subprocess._subprocess.STARTF_USESHOWWINDOW
     process = subprocess.Popen(cmnd, startupinfo=si, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -184,7 +184,7 @@ def processing(snap_path, gpt_script, mem):
         progress.setText(line)
     #os.remove(gpt_script)
  
-def execution(Output_folder, Input_folder, snap_path, start_date_string, end_date_string, binning_type, interval, res, mem, RE, sensor):
+def execution(Output_folder, Input_folder, snap_path, start_date_string, end_date_string, binning_type, interval, res, RE, sensor):
     if Input_folder == "":
         progress.setText('ERROR: Input folder not defined!')
         return
@@ -237,7 +237,7 @@ def execution(Output_folder, Input_folder, snap_path, start_date_string, end_dat
                     new_filename = Output_folder + outpref + str(k1) + '-' + str(k2)  + '_' + str(interval) + 'day_period_' + '_WQ'
                     files = ','.join(sel_filenames)
                     gpt_script = create_graph(tempdir, files, rows, new_filename, sensor)
-                    processing(snap_path, gpt_script, mem)
+                    processing(snap_path, gpt_script)
 
         elif binning_type == 1: #monthly
             datelist = []
@@ -256,7 +256,7 @@ def execution(Output_folder, Input_folder, snap_path, start_date_string, end_dat
                     new_filename = Output_folder + outpref + str(ymonth) + '_monthly_WQ'
                     files = ','.join(sel_filenames)
                     gpt_script = create_graph(tempdir, files, rows, new_filename, sensor)
-                    processing(snap_path, gpt_script, mem)
+                    processing(snap_path, gpt_script)
 
         else: #monthly date to date
             start_date = parser.parse(start_date_string)
@@ -286,6 +286,6 @@ def execution(Output_folder, Input_folder, snap_path, start_date_string, end_dat
                     new_filename = Output_folder + outpref + str(k1) + '-' + str(k2) + '_monthly_WQ'
                     files = ','.join(sel_filenames)
                     gpt_script = create_graph(tempdir, files, rows, new_filename, sensor)
-                    processing(snap_path, gpt_script, mem)
+                    processing(snap_path, gpt_script)
 
-execution(Output_folder, Input_folder, snap_path, start_date_string, end_date_string, binning_type, interval, res, mem, RE, sensor)
+execution(Output_folder, Input_folder, snap_path, start_date_string, end_date_string, binning_type, interval, res, RE, sensor)

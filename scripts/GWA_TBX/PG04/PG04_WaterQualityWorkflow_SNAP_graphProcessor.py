@@ -4,7 +4,8 @@
 ##PG04_WaterQualityWorkflow_SNAP_graphProcessor=name
 #ParameterFile|Input_files|Select files to be processed| 
 ##Input_folder=folder 
-##ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
+##ParameterString|ext|Define filename extension of input products (e.g. SEN3 or dim)|SEN3
+#ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
 ##Output_folder=folder
 
 import os, fnmatch
@@ -46,8 +47,13 @@ def locate(pattern, root_path):
     for path, dirs, files in os.walk(root_path):
         for filename in fnmatch.filter(dirs, pattern):
             yield os.path.join(path, filename)
+
+def locate_file(pattern, root_path):
+    for path, dirs, files in os.walk(root_path):
+        for filename in fnmatch.filter(files, pattern):
+            yield os.path.join(path, filename)
         
-def create_graph(tempdir):
+def create_graph(tempdir, subset):
     with open(tempdir + "ProcessingGraph.xml", "w") as text_file:
         text_file.write('<graph id="someGraphId">\n') 
         text_file.write('  <version>1.0</version>\n') 
@@ -59,22 +65,26 @@ def create_graph(tempdir):
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
         text_file.write('	\n') 
-        text_file.write('    <node id="Subset">\n') 
-        text_file.write('      <operator>Subset</operator>\n') 
-        text_file.write('      <sources>\n') 
-        text_file.write('          <source>Read</source>\n') 
-        text_file.write('      </sources>\n') 
-        text_file.write('      <parameters>\n') 
-        text_file.write('        <geoRegion>${wkt}</geoRegion>\n') 
-        text_file.write('        <copyMetadata>true</copyMetadata>\n') 
-        text_file.write('      </parameters>\n') 
-        text_file.write('    </node>\n') 
-        text_file.write('\n') 
+        if subset:
+            text_file.write('    <node id="Subset">\n') 
+            text_file.write('      <operator>Subset</operator>\n') 
+            text_file.write('      <sources>\n') 
+            text_file.write('          <source>Read</source>\n') 
+            text_file.write('      </sources>\n') 
+            text_file.write('      <parameters>\n') 
+            text_file.write('        <geoRegion>${wkt}</geoRegion>\n') 
+            text_file.write('        <copyMetadata>true</copyMetadata>\n') 
+            text_file.write('      </parameters>\n') 
+            text_file.write('    </node>\n') 
+            text_file.write('\n') 
         text_file.write('\n') 
         text_file.write('    <node id="IdePixNode">\n') 
         text_file.write('      <operator>Idepix.Sentinel3.Olci</operator>\n') 
         text_file.write('      <sources>\n') 
-        text_file.write('        <sourceProduct>Subset</sourceProduct>\n') 
+        if subset:
+            text_file.write('        <sourceProduct>Subset</sourceProduct>\n') 
+        else:
+            text_file.write('        <sourceProduct>Read</sourceProduct>\n') 
         text_file.write('      </sources>\n') 
         text_file.write('      <parameters>\n') 
         text_file.write('        <!-- leave out refl and rad bands to only join classif flags with the original product later before c2rcc -->\n') 
@@ -83,13 +93,16 @@ def create_graph(tempdir):
         text_file.write('        <outputSchillerNNValue>${outputCloudProbabilityValue}</outputSchillerNNValue>\n') 
         text_file.write('        <computeCloudBuffer>${cloudBuffer}</computeCloudBuffer>\n') 
         text_file.write('        <cloudBufferWidth>${cloudBufferWidth}</cloudBufferWidth>\n') 
-        text_file.write('        <computeCloudShadow>false</computeCloudShadow>\n') 
+#        text_file.write('        <computeCloudShadow>false</computeCloudShadow>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
         text_file.write('    <node id="IdePix">\n') 
         text_file.write('      <operator>Merge</operator>\n') 
         text_file.write('      <sources>\n') 
-        text_file.write('          <masterProduct>Subset</masterProduct>\n') 
+        if subset:
+            text_file.write('          <masterProduct>Subset</masterProduct>\n') 
+        else:
+            text_file.write('          <masterProduct>Read</masterProduct>\n') 
         text_file.write('          <idepix>IdePixNode</idepix>\n') 
         text_file.write('      </sources>\n') 
         text_file.write('    </node>\n') 
@@ -336,6 +349,8 @@ def create_graph(tempdir):
         text_file.write('            <copyMetadata>true</copyMetadata>\n') 
         text_file.write('        </parameters>\n') 
         text_file.write('    </node>\n') 
+        
+        
         text_file.write('    <node id="Merged"> <!-- replace with re-calibrated bands, include idepix-->\n') 
         text_file.write('        <operator>Merge</operator>\n') 
         text_file.write('        <sources>\n') 
@@ -355,6 +370,18 @@ def create_graph(tempdir):
         text_file.write('            </includes>\n') 
         text_file.write('        </parameters>\n') 
         text_file.write('    </node>\n') 
+        
+#        text_file.write('    <node id="WriteVic">\n') 
+#        text_file.write('      <operator>Write</operator>\n') 
+#        text_file.write('      <sources>\n') 
+#        text_file.write('        <source>Merged</source>\n') 
+#        text_file.write('      </sources>\n') 
+#        text_file.write('      <parameters>\n') 
+#        text_file.write('        <file>${targetbasePath}_Vic.dim</file>\n') 
+#        text_file.write('        <formatName>BEAM-DIMAP</formatName>\n') 
+#        text_file.write('      </parameters>\n') 
+#        text_file.write('    </node>\n') 
+        
         text_file.write('    <node id="C2RCC">\n') 
         text_file.write('      <operator>c2rcc.olci</operator>\n') 
         text_file.write('      <sources>\n') 
@@ -367,10 +394,34 @@ def create_graph(tempdir):
         text_file.write('      <parameters>\n') 
         text_file.write('        <validPixelExpression>${c2ValidExpression}</validPixelExpression>\n') 
         text_file.write('        <!-- set to 1.0 default is 35.0 -->\n') 
-        text_file.write('		<salinity>${averageSalinity}</salinity>\n') 
-        text_file.write('        <temperature>${averageTemperature}</temperature>\n') 
+        text_file.write('		      <salinity>${averageSalinity}</salinity>\n') 
+        text_file.write('        <temperature>${averageTemperature}</temperature>\n')
+        text_file.write('        <ozone>330.0</ozone>\n')
+        text_file.write('        <press>1000.0</press>\n')
+        text_file.write('        <TSMfakBpart>1.72</TSMfakBpart>\n')
+        text_file.write('        <TSMfakBwit>3.1</TSMfakBwit>\n')
+        text_file.write('        <CHLexp>1.04</CHLexp>\n')
+        text_file.write('        <CHLfak>21.0</CHLfak>\n')
+        text_file.write('        <thresholdRtosaOOS>0.005</thresholdRtosaOOS>\n')
+        text_file.write('        <thresholdAcReflecOos>0.1</thresholdAcReflecOos>\n')
+        text_file.write('        <thresholdCloudTDown865>0.955</thresholdCloudTDown865>\n')
+        text_file.write('        <outputAsRrs>false</outputAsRrs>\n')
+        text_file.write('        <deriveRwFromPathAndTransmittance>false</deriveRwFromPathAndTransmittance>\n')
+        text_file.write('        <useEcmwfAuxData>true</useEcmwfAuxData>\n')
+        text_file.write('        <outputRtoa>false</outputRtoa>\n')
+        text_file.write('        <outputRtosaGc>false</outputRtosaGc>\n')
+        text_file.write('        <outputRtosaGcAann>false</outputRtosaGcAann>\n')
+        text_file.write('        <outputRpath>false</outputRpath>\n')
+        text_file.write('        <outputTdown>false</outputTdown>\n')
+        text_file.write('        <outputTup>false</outputTup>\n')
+        text_file.write('        <outputAcReflectance>true</outputAcReflectance>\n')
+        text_file.write('        <outputRhown>false</outputRhown>\n')
+        text_file.write('        <outputOos>false</outputOos>\n')
+        text_file.write('        <outputKd>false</outputKd>\n')
+        text_file.write('        <outputUncertainties>false</outputUncertainties>\n')
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
+        
 #        text_file.write('    <node id="WriteC2RCC">\n') 
 #        text_file.write('      <operator>Write</operator>\n') 
 #        text_file.write('      <sources>\n') 
@@ -381,7 +432,38 @@ def create_graph(tempdir):
 #        text_file.write('        <formatName>BEAM-DIMAP</formatName>\n') 
 #        text_file.write('      </parameters>\n') 
 #        text_file.write('    </node>\n') 
+        
+#        text_file.write('    <node id="TSM_NECHAD">\n') 
+#        text_file.write('        <operator>BandMaths</operator>\n') 
+#        text_file.write('        <sources>\n') 
+#        text_file.write('            <c2rcc>C2RCC</c2rcc>\n') 
+#        text_file.write('        </sources>\n') 
+#        text_file.write('        <parameters>\n') 
+#        text_file.write('            <targetBands>\n') 
+#        text_file.write('                <targetBand>\n') 
+#        text_file.write('                    <name>tsm_nechad_865</name>\n') 
+#        text_file.write('                    <type>float32</type>\n') 
+#        text_file.write('                    <expression>2920 * rhow_17 / (1.0 -  rhow_17/0.21149)</expression>\n') 
+#        text_file.write('                    <unit>g m^-3</unit>\n') 
+#        text_file.write('                    <noDataValue>NaN</noDataValue>\n') 
+#        text_file.write('                </targetBand>\n') 
+#        text_file.write('            </targetBands>\n') 
+#        text_file.write('        </parameters>\n') 
+#        text_file.write('    </node>\n') 
         text_file.write('\n') 
+        
+        text_file.write('    <node id="C2RCC_Subset"> <!-- subset to TSM-->\n') 
+        text_file.write('        <operator>Subset</operator>\n') 
+        text_file.write('        <sources>\n') 
+        text_file.write('            <source>C2RCC</source>\n') 
+        text_file.write('        </sources>\n') 
+        text_file.write('        <parameters>\n') 
+        text_file.write('            <!-- only TSM -->\n') 
+        text_file.write('            <sourceBands>conc_tsm</sourceBands>\n') 
+        text_file.write('            <copyMetadata>true</copyMetadata>\n') 
+        text_file.write('        </parameters>\n') 
+        text_file.write('    </node>\n') 
+        
         text_file.write('\n') 
         text_file.write('    <node id="MphChl">\n') 
         text_file.write('      <operator>MphChl</operator>\n') 
@@ -392,7 +474,8 @@ def create_graph(tempdir):
         text_file.write('        <validPixelExpression>${mphValidExpression}</validPixelExpression>\n') 
         text_file.write('        <cyanoMaxValue>${mphCyanoMaxValue}</cyanoMaxValue>\n') 
         text_file.write('        <chlThreshForFloatFlag>${mphChlThreshForFloatFlag}</chlThreshForFloatFlag>\n') 
-        text_file.write('        <exportMph>${mphExportMph}</exportMph>\n') 
+        text_file.write('        <exportMph>false</exportMph>\n') 
+        #text_file.write('        <exportMph>${mphExportMph}</exportMph>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
 #        text_file.write('    <node id="WriteMphChl">\n') 
@@ -406,16 +489,18 @@ def create_graph(tempdir):
 #        text_file.write('      </parameters>\n') 
 #        text_file.write('    </node>\n') 
         text_file.write('\n') 
+        
         text_file.write('    <node id="C2RCC_reproj">\n') 
         text_file.write('      <operator>Reproject</operator>\n') 
         text_file.write('      <sources>\n') 
-        text_file.write('        <source>C2RCC</source>\n') 
+        text_file.write('        <source>C2RCC_Subset</source>\n') 
         text_file.write('      </sources>\n') 
         text_file.write('      <parameters>\n') 
         text_file.write('        <crs>${crs}</crs>\n') 
         text_file.write('        <resampling>Bilinear</resampling>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
+        
         text_file.write('    <node id="MphChl_reproj">\n') 
         text_file.write('      <operator>Reproject</operator>\n') 
         text_file.write('      <sources>\n') 
@@ -427,6 +512,7 @@ def create_graph(tempdir):
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
         text_file.write('\n') 
+        
         text_file.write('    <node id="C2RCC_tsm_reformat">\n') 
         text_file.write('      <operator>BandMaths</operator>\n') 
         text_file.write('      <sources>\n') 
@@ -445,25 +531,27 @@ def create_graph(tempdir):
         text_file.write('        </targetBands>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
-        text_file.write('    <node id="C2RCC_chl_reformat">\n') 
-        text_file.write('      <operator>BandMaths</operator>\n') 
-        text_file.write('      <sources>\n') 
-        text_file.write('        <sourceProducts>C2RCC_reproj</sourceProducts>\n') 
-        text_file.write('      </sources>\n') 
-        text_file.write('      <parameters>\n') 
-        text_file.write('        <targetBands>\n') 
-        text_file.write('          <targetBand>\n') 
-        text_file.write('            <name>chl</name>\n') 
-        text_file.write('            <type>float32</type>\n') 
-        text_file.write('            <!-- <expression>!l2w_flags.INVALID and not l1p_flags.CC_COASTLINE and not l1p_flags.CC_CLOUD and not l1p_flags.CC_CLOUD_BUFFER and not l1p_flags.CC_CLOUD_SHADOW ? conc_chl : NaN</expression> -->\n') 
-        text_file.write('			<expression>conc_chl</expression>\n') 
-        text_file.write('            <description>Chlorophyll 2 content.</description>\n') 
-        text_file.write('            <unit>mg/m^3</unit>\n') 
-        text_file.write('          </targetBand>\n') 
-        text_file.write('        </targetBands>\n') 
-        text_file.write('      </parameters>\n') 
-        text_file.write('    </node>\n') 
-        text_file.write('\n') 
+        
+#        text_file.write('    <node id="C2RCC_chl_reformat">\n') 
+#        text_file.write('      <operator>BandMaths</operator>\n') 
+#        text_file.write('      <sources>\n') 
+#        text_file.write('        <sourceProducts>C2RCC_reproj</sourceProducts>\n') 
+#        text_file.write('      </sources>\n') 
+#        text_file.write('      <parameters>\n') 
+#        text_file.write('        <targetBands>\n') 
+#        text_file.write('          <targetBand>\n') 
+#        text_file.write('            <name>chl</name>\n') 
+#        text_file.write('            <type>float32</type>\n') 
+#        text_file.write('            <!-- <expression>!l2w_flags.INVALID and not l1p_flags.CC_COASTLINE and not l1p_flags.CC_CLOUD and not l1p_flags.CC_CLOUD_BUFFER and not l1p_flags.CC_CLOUD_SHADOW ? conc_chl : NaN</expression> -->\n') 
+#        text_file.write('			<expression>conc_chl</expression>\n') 
+#        text_file.write('            <description>Chlorophyll 2 content.</description>\n') 
+#        text_file.write('            <unit>mg/m^3</unit>\n') 
+#        text_file.write('          </targetBand>\n') 
+#        text_file.write('        </targetBands>\n') 
+#        text_file.write('      </parameters>\n') 
+#        text_file.write('    </node>\n') 
+#        text_file.write('\n') 
+
         text_file.write('    <node id="MphChl_chl_reformat">\n') 
         text_file.write('      <operator>BandMaths</operator>\n') 
         text_file.write('      <sources>\n') 
@@ -482,6 +570,7 @@ def create_graph(tempdir):
         text_file.write('        </targetBands>\n') 
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
+        
         text_file.write('   <node id="MphChl_floatveg_reformat">\n') 
         text_file.write('      <operator>BandMaths</operator>\n') 
         text_file.write('      <sources>\n') 
@@ -499,13 +588,14 @@ def create_graph(tempdir):
         text_file.write('      </parameters>\n') 
         text_file.write('    </node>\n') 
         text_file.write('	\n') 
+        
         text_file.write('    <node id="finalMergeNode">\n') 
         text_file.write('      <operator>Merge</operator>\n') 
         text_file.write('      <sources>\n') 
         text_file.write('          <masterProduct>MphChl_chl_reformat</masterProduct>\n') 
         text_file.write('          <mph2>MphChl_floatveg_reformat</mph2>\n') 
         text_file.write('          <c2rcc>C2RCC_tsm_reformat</c2rcc>\n') 
-        text_file.write('          <c2rcc_chl>C2RCC_chl_reformat</c2rcc_chl>\n') 
+#        text_file.write('          <c2rcc_chl>C2RCC_chl_reformat</c2rcc_chl>\n') 
         text_file.write('      </sources>\n') 
         text_file.write('      <parameters>\n') 
         text_file.write('          <includes>\n') 
@@ -513,10 +603,10 @@ def create_graph(tempdir):
         text_file.write('                  <productId>masterProduct</productId>\n') 
         text_file.write('                  <name>chl_eutrophic</name>\n') 
         text_file.write('              </include>\n')
-        text_file.write('              <include>\n') 
-        text_file.write('                  <productId>c2rcc_chl</productId>\n') 
-        text_file.write('                  <name>chl</name>\n') 
-        text_file.write('              </include>\n') 
+#        text_file.write('              <include>\n') 
+#        text_file.write('                  <productId>c2rcc_chl</productId>\n') 
+#        text_file.write('                  <name>chl</name>\n') 
+#        text_file.write('              </include>\n') 
         text_file.write('              <include>\n') 
         text_file.write('                  <productId>c2rcc</productId>\n') 
         text_file.write('                  <name>tsm</name>\n') 
@@ -589,11 +679,11 @@ def processing(tempdir, Output_folder, input_files_list, snap_path, gpt_script, 
     for n in range(0, len(input_files_list)):
         inputfile = input_files_list[n]
         filename = inputfile.split("/")[len(inputfile.split("/")) - 1]
-        cmnd = '"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G -Dsnap.log.level=DEBUG "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-5] + '"'
-        progress.setText('"' + snap_path + '/bin/gpt.exe" -c '  + str(mem) + 'G -Dsnap.log.level=DEBUG "' ) 
-        progress.setText(gpt_script + '"' + ' -p "' + paramfile + '" ')
-        progress.setText(' -PsourceFile="' + inputfile )
-        progress.setText('" -PtargetbasePath="' + Output_folder + filename[:-5] + '" -e')
+        cmnd = '"' + snap_path + '/bin/gpt.exe" "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-5] + '"'
+        progress.setText('"' + snap_path + '/bin/gpt.exe"' ) 
+        progress.setText('"' + gpt_script + '"' + ' -p "' + paramfile + '" ')
+        progress.setText(' -PsourceFile="' + inputfile + '" ')
+        progress.setText('-PtargetbasePath="' + Output_folder + filename[:-5] + '" -e')
         si = subprocess.STARTUPINFO()
         si.dwFlags |= subprocess._subprocess.STARTF_USESHOWWINDOW
         process = subprocess.Popen(cmnd, startupinfo=si, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -601,14 +691,18 @@ def processing(tempdir, Output_folder, input_files_list, snap_path, gpt_script, 
             progress.setText(line)
     #os.remove(gpt_script)
  
-def execution(tempfolder, Output_folder, input_folder, snap_path, param0, param1, param2, param3, param4):
+def execution(tempfolder, Output_folder, input_folder, ext, snap_path, param0, param1, param2, param3, param4):
     
     #filenames = [name for name in os.listdir(input_folder) if os.path.isdir(os.path.join(input_folder, name))]
     #input_files_list = []
     #for x in filenames:
     #    input_files_list = input_files_list + (input_folder + ''.join(x)).split()
     
-    input_files_list = [file for file in locate('*.SEN3', input_folder)]
+    if ext == 'SEN3':
+        input_files_list = [file for file in locate('*.' + ext , input_folder)]
+    else:
+        progress.setText(str(input_folder))
+        input_files_list = [file for file in locate_file('*.' + ext , input_folder)]
     
     if input_files_list == "":
         progress.setText('ERROR: Input folder not defined!')
@@ -624,11 +718,15 @@ def execution(tempfolder, Output_folder, input_folder, snap_path, param0, param1
         tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0]
         progress.setText(tempdir)
         tempdir = tempdir.replace("\\", "/") + "/"
-        gpt_script = create_graph(tempdir)
         param_results = param_check(tempdir, param0, param1, param2, param3, param4)
         if param_results:
             paramfile= concat_param(tempdir, param0, param1, param2, param3, param4)
+            if 'dontsubset=false' in open(tempdir+param0).read():
+                subset = True
+            else:
+                subset = False
+        gpt_script = create_graph(tempdir, subset)
         processing(tempdir, Output_folder, input_files_list, snap_path, gpt_script, paramfile)
         #shutil.rmtree(tempdir)
 
-execution(tempfolder, Output_folder, input_folder, snap_path, param0, param1, param2, param3, param4)
+execution(tempfolder, Output_folder, input_folder, ext, snap_path, param0, param1, param2, param3, param4)

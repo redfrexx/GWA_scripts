@@ -3,7 +3,7 @@
 ##BC=group
 ##PG04_WaterQualityWorkflow_graphProcessor_v5=name
 ##ParameterFile|Input_files|Select files to be processed| 
-##ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
+#ParameterNumber|mem|Insert the amount of RAM (inGB) available for processing|1|31|1
 ##Output_folder=folder
 
 import os
@@ -43,7 +43,7 @@ def folder_create(tempfolder):
     tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0]
     return tempdir
         
-def create_graph(tempdir):
+def create_graph(tempdir, subset):
     with open(tempdir + "ProcessingGraph.xml", "w") as text_file:
         text_file.write('<graph id="someGraphId">\n')
         text_file.write('  <version>1.0</version>\n')
@@ -55,21 +55,25 @@ def create_graph(tempdir):
         text_file.write('    </parameters>\n')
         text_file.write('  </node>\n')
         
-        text_file.write('  <node id="Subset">\n')
-        text_file.write('    <operator>Subset</operator>\n')
-        text_file.write('    <sources>\n')
-        text_file.write('        <source>Read</source>\n')
-        text_file.write('    </sources>\n')
-        text_file.write('    <parameters>\n')
-        text_file.write('      <geoRegion>${wkt}</geoRegion>\n')
-        text_file.write('      <copyMetadata>true</copyMetadata>\n')
-        text_file.write('    </parameters>\n')
-        text_file.write('  </node>\n')
+        if subset:
+            text_file.write('  <node id="Subset">\n')
+            text_file.write('    <operator>Subset</operator>\n')
+            text_file.write('    <sources>\n')
+            text_file.write('        <source>Read</source>\n')
+            text_file.write('    </sources>\n')
+            text_file.write('    <parameters>\n')
+            text_file.write('      <geoRegion>${wkt}</geoRegion>\n')
+            text_file.write('      <copyMetadata>true</copyMetadata>\n')
+            text_file.write('    </parameters>\n')
+            text_file.write('  </node>\n')
         
         text_file.write('  <node id="IdePix">\n')
         text_file.write('    <operator>CoastColour.L1P</operator>\n')
         text_file.write('      <sources>\n')
-        text_file.write('        <merisL1B>Subset</merisL1B>\n')
+        if subset:
+            text_file.write('        <merisL1B>Subset</merisL1B>\n')
+        else:
+            text_file.write('        <merisL1B>Read</merisL1B>\n')
         text_file.write('      </sources>\n')    
         text_file.write('      <parameters>\n') 
         text_file.write('        <doIcol>${icol}</doIcol>\n') 
@@ -479,11 +483,11 @@ def processing(tempdir, Output_folder, input_files_list, beam_path, gpt_script, 
     for n in range(0, len(input_files_list)):
         inputfile = input_files_list[n]
         filename = inputfile.split("/")[len(inputfile.split("/")) - 1]
-        cmnd = '"' + beam_path + '/bin/gpt.bat" -c '  + str(mem) + 'G "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-3] + '"'
-        progress.setText('"' + beam_path + '/bin/gpt.bat" -c '  + str(mem) + 'G "' ) 
-        progress.setText(gpt_script + '"' + ' -p "' + paramfile + '" ')
-        progress.setText(' -PsourceFile="' + inputfile )
-        progress.setText('" -PtargetbasePath="' + Output_folder + filename[:-3] + '"')
+        cmnd = '"' + beam_path + '/bin/gpt.bat" "' + gpt_script + '"' + ' -p "' + paramfile + '" ' + ' -PsourceFile="' + inputfile + '" -PtargetbasePath="' + Output_folder + filename[:-3] + '"'
+        progress.setText('"' + beam_path + '/bin/gpt.bat"' ) 
+        progress.setText('"' + gpt_script + '"' + ' -p "' + paramfile + '" ')
+        progress.setText(' -PsourceFile="' + inputfile + '"')
+        progress.setText('-PtargetbasePath="' + Output_folder + filename[:-3] + '"')
         si = subprocess.STARTUPINFO()
         si.dwFlags |= subprocess._subprocess.STARTF_USESHOWWINDOW
         process = subprocess.Popen(cmnd, startupinfo=si, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -506,10 +510,14 @@ def execution(tempfolder, Output_folder, input_files_list, beam_path, param0, pa
     else:
         tempdir = glob.glob(os.path.join(tempfile.gettempdir(), tempfolder + '*'))[0]
         tempdir = tempdir.replace("\\", "/") + "/"
-        gpt_script = create_graph(tempdir)
         param_results = param_check(tempdir, param0, param1, param2, param3, param4, param5, param6)
         if param_results:
             paramfile= concat_param(tempdir, param0, param1, param2, param3, param4, param5, param6)
+            if 'dontsubset=false' in open(tempdir+param0).read():
+                subset = True
+            else:
+                subset = False
+        gpt_script = create_graph(tempdir, subset)
         processing(tempdir, Output_folder, input_files_list, beam_path, gpt_script, paramfile)
         #shutil.rmtree(tempdir)
 
