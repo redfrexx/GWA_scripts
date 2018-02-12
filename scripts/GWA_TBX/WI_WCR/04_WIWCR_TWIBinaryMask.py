@@ -44,14 +44,14 @@ if not DEBUG:
     from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
     from processing.tools import dataobjects
     import qgis
+    
 
-#path_TWI = r"I:\WI\01_Raw\DEM_TBX_SAGA\full_tile\dem_clippedSAGA.tif"
 out_dir = os.path.dirname(path_TWI)
 print out_dir
 
 attrName = None
 attrVal = None
-extentBuffer = 0
+extentBuffer=0
 
 # Create TWI binary mask ------------------------------------------------
 
@@ -62,37 +62,36 @@ if not DEBUG:
 
 # Median filter
 TWI, geotrans, proj = rsu.raster2array(path_TWI)
-TWI_smooth = ndimage.median_filter(TWI, size=7) * 1000
-dest = os.path.join(out_dir, "TWI2.tif")
-rsu.array2raster(TWI_smooth, geotrans, proj, dest, gdal.GDT_Int16, -9999)
-path_TWI = dest
+TWI = ndimage.median_filter(TWI, size=7) * 1000
 
-# Read TWI file
-TWI_file = gdal.Open(path_TWI)
-TWI = TWI_file.GetRasterBand(1).ReadAsArray()
-nodata_TWI = TWI_file.GetRasterBand(1).GetNoDataValue()
-TWI = np.where(TWI == nodata_TWI, np.nan, TWI)
+path_TWI_filtered = path_TWI[:-4] + "_TWIfiltered.tif"
+x = rsu.array2raster(TWI, geotrans, proj, path_TWI_filtered, gdal.GDT_Float32, -9999)
+if x == False:
+    raise RuntimeError("Exporting TWI failed.")
 
-# Find threshold
-TWI = (TWI - np.nanmin(TWI)) / (np.nanmax(TWI) - np.nanmin(TWI))
-with np.errstate(invalid='ignore'):
-    TWI_binary = (TWI <= 0.4).astype(int)
 
-# Sieve mask
+# Normalize TWI
+TWI = (TWI-np.nanpercentile(TWI, 1))/(np.nanpercentile(TWI, 99)-np.nanpercentile(TWI, 1))
+
+# Create TWI mask
+TWI_binary = np.where(TWI > 0.4, 0, 1)
+
+#Sieve mask
 TWI_binary = rsu.removeNoise(TWI_binary, 2)
 TWI_binary = rsu.binaryBuffer_negative(TWI_binary, 3)
 
-# Export to file
-x = rsu.array2raster(
-    TWI_binary, TWI_file.GetGeoTransform(),
-    TWI_file.GetProjection(), outfile_binary, gdal.GDT_Byte, 255)
-if not x:
-    print("Exporting TWI mask failed.")
+#Export to file
+x = rsu.array2raster(TWI_binary,geotrans, proj, outfile_binary, gdal.GDT_Byte, 255)
+if x == False:
     raise RuntimeError("Exporting TWI mask failed.")
 
-del TWI_file, TWI_binary, TWI
+
+
+del TWI_binary, TWI
 
 dataobjects.load(outfile_binary, os.path.basename(outfile_binary))
+dataobjects.load(path_TWI_filtered, os.path.basename(path_TWI_filtered))
 
 if not DEBUG:
     progress.setText("TWI binary mask done.")
+
