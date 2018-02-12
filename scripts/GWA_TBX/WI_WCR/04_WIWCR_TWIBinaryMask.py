@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Copyright (c) 2016, GeoVille Information Systems GmbH
 # All rights reserved.
 #
@@ -94,3 +95,4 @@ dataobjects.load(path_TWI_filtered, os.path.basename(path_TWI_filtered))
 
 if not DEBUG:
     progress.setText("TWI binary mask done.")
+
