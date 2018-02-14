@@ -32,11 +32,11 @@ def folder_check(tempfolder):
         return True
 
 def create_parameterfile(tempdir, dontsubset):
-    with open(tempdir + "WaterQualityParametersOLCI00.txt", "w") as text_file:
+    with open(tempdir + "WaterQualityParameters00.txt", "w") as text_file:
         text_file.write('dontsubset='+ str(dontsubset).lower() + '\n')
         
 def create_subset_parameterfile(tempdir, dontsubset, wkt_string):
-    with open(tempdir + "WaterQualityParametersOLCI00.txt", "w") as text_file:
+    with open(tempdir + "WaterQualityParameters00.txt", "w") as text_file:
         text_file.write('wkt='+ str(wkt_string) + '\n')
         text_file.write('dontsubset='+ str(dontsubset).lower() + '\n')
 
