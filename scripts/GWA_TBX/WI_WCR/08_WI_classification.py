@@ -212,8 +212,11 @@ for wm_file in watermask_files:
 
         # Dense vegetation wetness
         dveg_files = [os.path.join(path_masks, f) for f in
-                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_dveg_mask.tif")]
-
+                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_dveg_mask_sar.tif")]
+        if not dveg_files:
+            dveg_files = [os.path.join(path_masks, f) for f in
+                          fnmatch.filter(os.listdir(path_masks),
+                                         "*_d" + wm_file[dateidx:dateidx + 8] + "*_dveg_mask.tif")]
         if dveg_files:
             jointExt = rsu.getJointExtent(dveg_files[0], AOIextent=joint_extent)
             dveg_mask, geotrans_dveg = rsu.raster2array(dveg_files[0], jointExt)[:2]
@@ -226,7 +229,11 @@ for wm_file in watermask_files:
 
         # Sparse vegetation wetness
         sveg_files = [os.path.join(path_masks, f) for f in
-                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_sveg_mask.tif")]
+                      fnmatch.filter(os.listdir(path_masks), "*_d" + wm_file[dateidx:dateidx + 8] + "*_sveg_mask_sar.tif")]
+        if not sveg_files:
+            sveg_files = [os.path.join(path_masks, f) for f in
+                          fnmatch.filter(os.listdir(path_masks),
+                                         "*_d" + wm_file[dateidx:dateidx + 8] + "*_sveg_mask.tif")]
         if sveg_files:
             jointExt = rsu.getJointExtent(sveg_files[0], AOIextent=joint_extent)
             sveg_mask, geotrans_sveg = rsu.raster2array(sveg_files[0], jointExt)[:2]
@@ -317,7 +324,8 @@ WetLowProb = np.where((tempWet > 0) & (WWPI < low_wetland_prob_thresh), 4, 0)
 
 # New Classification: 1 - Permanent Water, 2 - Wetland (high prob), 3 - Wetland (med prob), 4 - Wetland (low prob.)
 WetProbClass = permWater + WetHighProb + WetMedProb + WetLowProb
-WetProbClass = np.where(np.isnan(water_frequency), np.nan, WetProbClass)
+WetProbClass = np.where(np.isnan(WWPI), np.nan, WetProbClass)
+
 
 # Export maps to file ===============================================================================
 

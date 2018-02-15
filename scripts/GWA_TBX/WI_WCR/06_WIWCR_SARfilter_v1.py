@@ -70,7 +70,7 @@ if not os.path.exists(path_output):
         sys.exit(1)
 
 # Create output directory
-outDirFiltered = os.path.join(path_output, "SAR_filtered")
+outDirFiltered = os.path.join(path_output, "step6_SAR_filtered")
 if not os.path.exists(outDirFiltered):
     os.mkdir(outDirFiltered)
 
