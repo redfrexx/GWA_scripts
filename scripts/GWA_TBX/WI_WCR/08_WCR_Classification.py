@@ -127,10 +127,10 @@ if end_date < start_date:
 # WATER occurrence and frequency =========================================================
 
 # Search water masks
-watermask_files = [os.path.join(path_watermasks, f) for f in fnmatch.filter(os.listdir(path_watermasks), "*_water_mask.tif")]
+watermask_files = [os.path.join(path_watermasks, f) for f in fnmatch.filter(os.listdir(path_watermasks), "*_water_mask_sar.tif")]
 if not watermask_files:
     watermask_files = [os.path.join(path_watermasks, f) for f in
-                       fnmatch.filter(os.listdir(path_watermasks), "*_water_mask_sar.tif")]
+                       fnmatch.filter(os.listdir(path_watermasks), "*_water_mask.tif")]
 
 # Check whether masks exist
 if len(watermask_files) == 0:

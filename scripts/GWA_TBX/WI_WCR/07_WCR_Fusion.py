@@ -84,6 +84,7 @@ def fuse_watermasks(watermask_opt, watermask_opt_max, watermask_sar):
     # Fusion rules
     fused_watermask = np.where(((watermask_sar == 1) & (watermask_opt_max == 1)) |
                                ((watermask_sar == 1) & (watermask_opt >= 0.8)), 1, watermask_opt)
+    fused_watermask = np.where(np.isnan(watermask_opt) & ((watermask_opt_max == 0) & (watermask_sar == 0)), 0, fused_watermask)
 
     return fused_watermask
 
