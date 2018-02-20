@@ -357,7 +357,10 @@ copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 # Load water frequency to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    try:
+        dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    except:
+        dataobjects.load(dest, os.path.basename(dest))
 
 # Wetness frequency
 file_name = title + "_wetness_frequency"
@@ -376,7 +379,11 @@ copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 # Load water frequency to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    try:
+        dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    except:
+        dataobjects.load(dest, os.path.basename(dest))
+
 
 # DENSE VEGETATOIN --------------------------------------------------------------------
 file_name = title + "_dveg_frequency"
@@ -440,7 +447,10 @@ copyfile(os.path.join(qmlDir, "wetland_probability.qml"), outfile_name)
 
 # Load water frequency to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    try:
+        dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    except:
+        dataobjects.load(dest, os.path.basename(dest))
 
 # WWPI
 file_name = title + "_WWPI"
@@ -459,7 +469,10 @@ copyfile(os.path.join(qmlDir, "WWPI.qml"), outfile_name)
 
 # Load water frequency to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    try:
+        dataobjects.load(dest, os.path.basename(dest), isRaster=True)
+    except:
+        dataobjects.load(dest, os.path.basename(dest))
 
 
 if not DEBUG:
