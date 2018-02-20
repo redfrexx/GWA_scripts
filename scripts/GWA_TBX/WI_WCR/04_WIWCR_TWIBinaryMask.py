@@ -89,8 +89,8 @@ if x == False:
 
 del TWI_binary, TWI
 
-dataobjects.load(outfile_binary, os.path.basename(outfile_binary))
-dataobjects.load(path_TWI_filtered, os.path.basename(path_TWI_filtered))
+dataobjects.load(outfile_binary, os.path.basename(outfile_binary), isRaster=True)
+dataobjects.load(path_TWI_filtered, os.path.basename(path_TWI_filtered), isRaster=True)
 
 if not DEBUG:
     progress.setText("TWI binary mask done.")

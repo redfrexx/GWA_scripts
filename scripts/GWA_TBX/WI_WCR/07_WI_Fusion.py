@@ -255,7 +255,7 @@ for wm_file in watermask_files:
             sys.exit(1)
     else:
         if not DEBUG:
-            dataobjects.load(path_output_file, os.path.basename(path_output_file))
+            dataobjects.load(path_output_file, os.path.basename(path_output_file), isRaster=True)
 
     # Dense vegetation wetness mask
     wet_files_soil = [os.path.join(path_masks_opt, f) for f in
@@ -323,4 +323,4 @@ for wm_file in watermask_files:
                 sys.exit(1)
         else:
             if not DEBUG:
-                dataobjects.load(path_output_file, os.path.basename(path_output_file))
+                dataobjects.load(path_output_file, os.path.basename(path_output_file), isRaster=True)

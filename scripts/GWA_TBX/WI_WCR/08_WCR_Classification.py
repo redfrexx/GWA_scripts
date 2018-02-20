@@ -214,7 +214,7 @@ copyfile(os.path.join(qmlDir, "water_wet_frequency.qml"), outfile_name)
 
 # Load water frequency to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest))
+    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
 
 # Maximum water extent
 file_name = title + "_maximum_water_extent"
@@ -233,7 +233,7 @@ copyfile(os.path.join(qmlDir, "maximum_extent.qml"), outfile_name)
 
 # Load to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest))
+    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
 
 # Minimum water extent
 file_name = title + "_minimum_water_extent"
@@ -252,7 +252,7 @@ copyfile(os.path.join(qmlDir, "minimum_extent.qml"), outfile_name)
 
 # Load to canvas
 if not DEBUG:
-    dataobjects.load(dest, os.path.basename(dest))
+    dataobjects.load(dest, os.path.basename(dest), isRaster=True)
 
 if not DEBUG:
     progress.setText('Water Cycle Regime classification done.\n')

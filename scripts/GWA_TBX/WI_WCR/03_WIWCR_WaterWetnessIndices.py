@@ -597,7 +597,7 @@ for date in unique_dates:
                 print e
 
         if not DEBUG and index == "NDWI":
-            dataobjects.load(vrt_file_name, os.path.basename(vrt_file_name))
+            dataobjects.load(vrt_file_name, os.path.basename(vrt_file_name), isRaster=True)
 
 # Update progress bar
 if not DEBUG:
